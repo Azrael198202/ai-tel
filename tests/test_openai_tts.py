@@ -99,7 +99,6 @@ def test_synthesize_to_wav_uses_gpt_4o_mini_tts(monkeypatch) -> None:
     result = tts.synthesize_to_wav("Hello world", gender="male", age_group="adult")
 
     assert result["status"] == "success"
-    assert result["model"] == "gpt-4o-mini-tts"
     assert result["voice"] == "onyx"
     assert "generated_wav" in result["file_path"]
     assert Path(result["file_path"]).exists()
@@ -130,11 +129,35 @@ def test_play_wav_file_uses_sounddevice(monkeypatch) -> None:
         wav_file.setframerate(16000)
         wav_file.writeframes(b"\x00\x00" * 160)
 
-    monkeypatch.setattr(tts, "_play_with_winsound", lambda path: (_ for _ in ()).throw(RuntimeError("winsound unavailable")))
     monkeypatch.setattr(tts, "_load_sounddevice_module", lambda: fake_sounddevice)
 
-    tts.play_wav_file(wav_path)
+    backend = tts.play_wav_file(wav_path)
 
+    assert backend == "sounddevice"
     assert fake_sounddevice.play_called is True
     assert fake_sounddevice.wait_called is True
     assert fake_sounddevice.last_sample_rate == 16000
+
+
+def test_play_wav_file_falls_back_to_winsound_on_windows(monkeypatch) -> None:
+    tts = OpenAITTS()
+    test_dir = Path("tests_tmp/tts_playback")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    wav_path = test_dir / "winsound_fallback.wav"
+
+    with wave.open(str(wav_path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        wav_file.writeframes(b"\x00\x00" * 160)
+
+    played_with = {"backend": None}
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(tts, "_load_sounddevice_module", lambda: (_ for _ in ()).throw(RuntimeError("sounddevice unavailable")))
+    monkeypatch.setattr(tts, "_play_with_winsound", lambda path: played_with.__setitem__("backend", "winsound"))
+
+    backend = tts.play_wav_file(wav_path)
+
+    assert backend == "winsound"
+    assert played_with["backend"] == "winsound"

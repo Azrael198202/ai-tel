@@ -101,3 +101,30 @@ def test_openai_text_responder_generates_reply(monkeypatch) -> None:
     assert "Japanese" in messages[0]["content"]
     assert "Keep answers concise." in messages[0]["content"]
     assert messages[1]["content"] == "Can you help me sort garbage today?"
+
+
+def test_openai_text_responder_includes_conversation_history(monkeypatch) -> None:
+    responder = OpenAITextResponder()
+    fake_client = _FakeOpenAIClient(api_key="test-key")
+
+    temp_root = Path("tests_tmp/reply_history")
+    temp_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(temp_root)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(responder, "_load_openai_client_class", lambda: lambda api_key: fake_client)
+
+    responder.generate_reply(
+        user_text="What about tomorrow?",
+        conversation_history=[
+            {"role": "user", "content": "When is burnable trash collected?"},
+            {"role": "assistant", "content": "Tuesday and Friday."},
+            {"role": "system", "content": "ignore me"},
+            {"role": "assistant", "content": "   "},
+        ],
+    )
+
+    messages = fake_client.chat.completions.last_kwargs["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[1] == {"role": "user", "content": "When is burnable trash collected?"}
+    assert messages[2] == {"role": "assistant", "content": "Tuesday and Friday."}
+    assert messages[3] == {"role": "user", "content": "What about tomorrow?"}

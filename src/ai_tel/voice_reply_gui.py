@@ -1,4 +1,4 @@
-﻿"""Voice assistant GUI: continuous speech-to-text, OpenAI reply, then text-to-speech."""
+"""Voice assistant GUI: continuous speech-to-text, OpenAI reply, then text-to-speech."""
 
 from __future__ import annotations
 
@@ -11,12 +11,21 @@ from pathlib import Path
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
-from .gui import LANGUAGE_OPTIONS
-from .openai_reply import OpenAITextResponder
-from .openai_speech import OpenAISpeechRecognizer
-from .openai_tts import OpenAITTS
-from .tts_gui import AGE_OPTIONS, GENDER_OPTIONS
+try:
+    from .gui import LANGUAGE_OPTIONS
+    from .openai_reply import OpenAITextResponder
+    from .openai_speech import OpenAISpeechRecognizer
+    from .openai_tts import OpenAITTS
+    from .tts_gui import AGE_OPTIONS, GENDER_OPTIONS
+except ImportError:
+    import sys
 
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from ai_tel.gui import LANGUAGE_OPTIONS
+    from ai_tel.openai_reply import OpenAITextResponder
+    from ai_tel.openai_speech import OpenAISpeechRecognizer
+    from ai_tel.openai_tts import OpenAITTS
+    from ai_tel.tts_gui import AGE_OPTIONS, GENDER_OPTIONS
 
 class VoiceAssistantApp:
     def __init__(self, root: tk.Tk) -> None:
@@ -40,7 +49,8 @@ class VoiceAssistantApp:
         self.age_var = tk.StringVar(value=AGE_OPTIONS[2][0])
         self.system_prompt_var = tk.StringVar(value="Be friendly and helpful.")
         self.status_var = tk.StringVar(value="Ready")
-        self.last_speech_file_path: str | None = None
+        self.last_speech_file_path: str | None = self._find_latest_reply_wav()
+        self.conversation_history: deque[dict[str, str]] = deque(maxlen=12)
 
         self._build_ui()
 
@@ -122,6 +132,7 @@ class VoiceAssistantApp:
         if self.conversation_active:
             return
 
+        self.conversation_history.clear()
         self.conversation_active = True
         self.record_button.configure(text="Stop Conversation")
         self._set_status("Conversation mode started. Listening for speech...")
@@ -134,6 +145,7 @@ class VoiceAssistantApp:
         self._set_status("Stopping conversation mode...")
 
     def play_last_reply(self) -> None:
+        self.last_speech_file_path = self._find_latest_reply_wav() or self.last_speech_file_path
         if not self.last_speech_file_path:
             self._set_status("No reply audio is available yet.")
             return
@@ -156,6 +168,7 @@ class VoiceAssistantApp:
         self.root.after(0, lambda payload=result: self._finish_manual_playback(payload))
 
     def open_last_reply(self) -> None:
+        self.last_speech_file_path = self._find_latest_reply_wav() or self.last_speech_file_path
         if not self.last_speech_file_path:
             self._set_status("No reply audio is available yet.")
             return
@@ -322,10 +335,12 @@ class VoiceAssistantApp:
             return transcript
 
         self.root.after(0, lambda: self._set_status("Generating assistant reply..."))
+        transcript_text = str(transcript.get("text", "")).strip()
         reply = self.responder.generate_reply(
-            user_text=str(transcript.get("text", "")),
+            user_text=transcript_text,
             system_prompt=self.system_prompt_var.get().strip() or None,
             language_hint=language_hint,
+            conversation_history=list(self.conversation_history),
         )
         if reply.get("status") != "success":
             return {
@@ -335,6 +350,11 @@ class VoiceAssistantApp:
                 "reply": reply,
                 "audio": audio_payload,
             }
+
+        reply_text = str(reply.get("text", "")).strip()
+        if transcript_text and reply_text:
+            self.conversation_history.append({"role": "user", "content": transcript_text})
+            self.conversation_history.append({"role": "assistant", "content": reply_text})
 
         if not self.conversation_active:
             return {
@@ -358,8 +378,7 @@ class VoiceAssistantApp:
             "speech": speech,
             "audio": audio_payload,
         }
-        if speech.get("status") == "success" and speech.get("file_path"):
-            self.last_speech_file_path = str(speech.get("file_path"))
+
         if speech.get("status") != "success":
             result["message"] = speech.get("message", "Failed to generate or play assistant speech.")
         return result
@@ -377,9 +396,12 @@ class VoiceAssistantApp:
 
         transcript_text = str(result.get("transcript", {}).get("text", "")).strip()
         reply_text = str(result.get("reply", {}).get("text", "")).strip()
+        speech_file_path = str(result.get("speech", {}).get("file_path", "")).strip()
+        if speech_file_path:
+            self.last_speech_file_path = speech_file_path
         backend = str(result.get("speech", {}).get("playback_backend", "unknown"))
         self._set_status(
-            f"Reply played with {backend}. Heard: {transcript_text[:24] or 'n/a'} | Replied: {reply_text[:24] or 'n/a'}"
+            f"Reply played with {backend}. WAV: {self.last_speech_file_path or 'n/a'}"
         )
         self._append_output(result)
 
@@ -387,6 +409,16 @@ class VoiceAssistantApp:
         self.record_button.configure(text="Start Conversation", state="normal")
         self.conversation_active = False
         self._set_status("Conversation mode stopped.")
+
+    def _find_latest_reply_wav(self) -> str | None:
+        output_dir = Path.cwd() / self.tts.output_dir_name
+        if not output_dir.exists():
+            return None
+
+        candidates = sorted(output_dir.glob("tts_*.wav"), key=lambda item: item.stat().st_mtime, reverse=True)
+        if not candidates:
+            return None
+        return str(candidates[0])
 
     def _selected_culture(self) -> str:
         return self.language_map.get(self.language_var.get(), "ja-JP")

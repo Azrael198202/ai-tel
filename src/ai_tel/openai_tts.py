@@ -92,7 +92,6 @@ class OpenAITTS:
         return {
             "status": "success",
             "file_path": str(final_path),
-            "model": self.model,
             "voice": profile.voice,
             "gender": profile.gender,
             "age_group": profile.age_group,
@@ -148,6 +147,13 @@ class OpenAITTS:
         if validation_error is not None:
             raise RuntimeError(validation_error)
 
+        sounddevice_error = None
+        try:
+            self._play_with_sounddevice(path)
+            return "sounddevice"
+        except Exception as exc:
+            sounddevice_error = exc
+
         winsound_error = None
         if sys.platform.startswith("win"):
             try:
@@ -156,13 +162,11 @@ class OpenAITTS:
             except Exception as exc:
                 winsound_error = exc
 
-        try:
-            self._play_with_sounddevice(path)
-            return "sounddevice"
-        except Exception as exc:
-            if winsound_error is not None:
-                raise RuntimeError(f"winsound playback failed: {winsound_error}; sounddevice playback failed: {exc}") from exc
-            raise
+        if winsound_error is not None:
+            raise RuntimeError(f"sounddevice playback failed: {sounddevice_error}; winsound playback failed: {winsound_error}") from winsound_error
+        if sounddevice_error is not None:
+            raise sounddevice_error
+        raise RuntimeError("No audio playback backend is available.")
 
     def _play_with_winsound(self, file_path: Path) -> None:
         import winsound

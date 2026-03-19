@@ -22,6 +22,7 @@ class OpenAITextResponder:
         user_text: str,
         system_prompt: str | None = None,
         language_hint: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         cleaned_text = user_text.strip()
         if not cleaned_text:
@@ -41,10 +42,9 @@ class OpenAITextResponder:
             return self._error(str(exc))
 
         client = OpenAI(api_key=api_key)
-        messages = [
-            {"role": "system", "content": self._build_system_prompt(system_prompt, language_hint)},
-            {"role": "user", "content": cleaned_text},
-        ]
+        messages = [{"role": "system", "content": self._build_system_prompt(system_prompt, language_hint)}]
+        messages.extend(self._sanitize_conversation_history(conversation_history))
+        messages.append({"role": "user", "content": cleaned_text})
 
         try:
             response = client.chat.completions.create(model=self.model, messages=messages)
@@ -130,6 +130,19 @@ class OpenAITextResponder:
             for part in parts:
                 chunks.append({"path": document["path"], "content": part})
         return chunks
+
+    def _sanitize_conversation_history(self, conversation_history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+        if not conversation_history:
+            return []
+
+        sanitized: list[dict[str, str]] = []
+        for message in conversation_history:
+            role = str(message.get("role", "")).strip().lower()
+            content = str(message.get("content", "")).strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            sanitized.append({"role": role, "content": content})
+        return sanitized
 
     def _build_system_prompt(self, system_prompt: str | None, language_hint: str | None) -> str:
         base = (

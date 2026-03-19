@@ -8,3 +8,7 @@ src/*.egg-info/
 src/ai_tel.egg-info/
 pytest-cache-files-*/
 generated_wav/
+recorded_wav/
+logs/
+*.log
+*.wav
