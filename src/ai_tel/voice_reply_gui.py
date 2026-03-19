@@ -7,6 +7,7 @@ import queue
 import threading
 import tkinter as tk
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
@@ -27,7 +28,10 @@ except ImportError:
     from ai_tel.openai_tts import OpenAITTS
     from ai_tel.tts_gui import AGE_OPTIONS, GENDER_OPTIONS
 
+
 class VoiceAssistantApp:
+    session_output_dir_name = "conversation_logs"
+
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("AI Voice Assistant")
@@ -52,6 +56,11 @@ class VoiceAssistantApp:
         self.last_speech_file_path: str | None = self._find_latest_reply_wav()
         # Keep roughly the last 6 turns (user + assistant pairs) for short-term conversation memory.
         self.conversation_history: deque[dict[str, str]] = deque(maxlen=12)
+        self.session_started_at: datetime | None = None
+        self.session_stopped_at: datetime | None = None
+        self.session_turns: list[dict[str, str]] = []
+        self.session_errors: list[str] = []
+        self.session_log_file_path: str | None = None
 
         self._build_ui()
 
@@ -65,7 +74,7 @@ class VoiceAssistantApp:
         ttk.Button(nav, text="Open Speech To Text", command=self._open_stt_window).pack(side="right")
         ttk.Button(nav, text="Open Text To Speech", command=self._open_tts_window).pack(side="right", padx=(0, 8))
 
-        title = ttk.Label(container, text="OpenAI Voice Assistant", font=("Segoe UI", 16, "bold"))
+        title = ttk.Label(container, text="Voice Assistant", font=("Segoe UI", 16, "bold"))
         title.pack(anchor="w", pady=(10, 0))
 
         subtitle = ttk.Label(
@@ -134,6 +143,7 @@ class VoiceAssistantApp:
             return
 
         self.conversation_history.clear()
+        self._begin_session_log()
         self.conversation_active = True
         self.record_button.configure(text="Stop Conversation")
         self._set_status("Conversation mode started. Listening for speech...")
@@ -178,23 +188,19 @@ class VoiceAssistantApp:
             self.tts.open_wav_with_system_player(self.last_speech_file_path)
         except Exception as exc:
             self._set_status(f"Failed to open the last reply WAV: {exc}")
-            self._append_output({"open_last_reply": {"status": "error", "message": str(exc), "file_path": self.last_speech_file_path}})
             return
 
         self._set_status(f"Opened last reply WAV: {self.last_speech_file_path}")
-        self._append_output({"open_last_reply": {"status": "success", "file_path": self.last_speech_file_path}})
 
     def _finish_manual_playback(self, result: dict) -> None:
         self.play_last_button.configure(state="normal")
         if result.get("status") != "success":
             self._set_status(result.get("message", "Manual playback failed."))
-            self._append_output({"manual_playback": result})
             return
 
         self._set_status(
             f"Last reply replayed with {result.get('playback_backend', 'unknown')} from {result.get('file_path', '')}"
         )
-        self._append_output({"manual_playback": result})
 
     def _conversation_loop(self) -> None:
         while self.conversation_active:
@@ -393,12 +399,14 @@ class VoiceAssistantApp:
             message = result.get("message", "Voice assistant flow failed.")
             if saved:
                 message = f"{message} Saved WAV: {saved}"
+            transcript_text = str(result.get("transcript", {}).get("text", "")).strip()
+            self._record_session_error(message=message, transcript_text=transcript_text)
             self._set_status(message)
-            self._append_output({"error": result})
             return
 
         transcript_text = str(result.get("transcript", {}).get("text", "")).strip()
         reply_text = str(result.get("reply", {}).get("text", "")).strip()
+        self._record_session_turn(user_text=transcript_text, assistant_text=reply_text)
         speech_file_path = str(result.get("speech", {}).get("file_path", "")).strip()
         if speech_file_path:
             self.last_speech_file_path = speech_file_path
@@ -406,12 +414,14 @@ class VoiceAssistantApp:
         self._set_status(
             f"Reply played with {backend}. WAV: {self.last_speech_file_path or 'n/a'}"
         )
-        self._append_output(result)
 
     def _finish_conversation_stop(self) -> None:
         self.record_button.configure(text="Start Conversation", state="normal")
         self.conversation_active = False
-        self._set_status("Conversation mode stopped.")
+        self.session_stopped_at = datetime.now()
+        self._persist_session_log()
+        saved_note = f" Saved transcript: {self.session_log_file_path}" if self.session_log_file_path else ""
+        self._set_status(f"Conversation mode stopped.{saved_note}")
 
     def _find_latest_reply_wav(self) -> str | None:
         output_dir = Path.cwd() / self.tts.output_dir_name
@@ -465,6 +475,84 @@ class VoiceAssistantApp:
 
     def _set_status(self, message: str) -> None:
         self.status_var.set(message)
+
+    def _begin_session_log(self) -> None:
+        self.session_started_at = datetime.now()
+        self.session_stopped_at = None
+        self.session_turns = []
+        self.session_errors = []
+        output_dir = Path.cwd() / self.session_output_dir_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = self.session_started_at.strftime("%Y%m%d_%H%M%S")
+        self.session_log_file_path = str(output_dir / f"conversation_{timestamp}.txt")
+        self._persist_session_log()
+
+    def _record_session_turn(self, user_text: str, assistant_text: str) -> None:
+        if not user_text and not assistant_text:
+            return
+        self.session_turns.append(
+            {
+                "user": user_text,
+                "assistant": assistant_text,
+            }
+        )
+        self._persist_session_log()
+
+    def _record_session_error(self, message: str, transcript_text: str | None = None) -> None:
+        if transcript_text:
+            self.session_turns.append(
+                {
+                    "user": transcript_text,
+                    "assistant": "",
+                }
+            )
+        if message:
+            self.session_errors.append(message)
+        self._persist_session_log()
+
+    def _persist_session_log(self) -> None:
+        rendered = self._render_session_text()
+        self._replace_output(rendered)
+        if not self.session_log_file_path:
+            return
+        Path(self.session_log_file_path).write_text(rendered, encoding="utf-8")
+
+    def _render_session_text(self) -> str:
+        lines = ["Conversation transcript"]
+        if self.session_started_at:
+            lines.append(f"Started: {self.session_started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        if self.session_stopped_at:
+            lines.append(f"Stopped: {self.session_stopped_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        if self.session_log_file_path:
+            lines.append(f"Saved to: {self.session_log_file_path}")
+        lines.append("")
+
+        if not self.session_turns and not self.session_errors:
+            lines.append("Waiting for conversation...")
+            return "\n".join(lines).rstrip() + "\n"
+
+        for index, turn in enumerate(self.session_turns, start=1):
+            lines.append(f"Turn {index}")
+            user_text = turn.get("user", "").strip() or "(no transcript)"
+            assistant_text = turn.get("assistant", "").strip() or "(no assistant reply)"
+            lines.append(f"User: {user_text}")
+            lines.append(f"Assistant: {assistant_text}")
+            lines.append("")
+
+        if self.session_errors:
+            lines.append("Errors")
+            for index, message in enumerate(self.session_errors, start=1):
+                lines.append(f"{index}. {message}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _replace_output(self, text: str) -> None:
+        self.output.configure(state="normal")
+        self.output.delete("1.0", "end")
+        self.output.insert("1.0", text)
+        self.output.see("end")
+        self.output.configure(state="disabled")
 
     def _append_output(self, payload: dict) -> None:
         self.output.configure(state="normal")
