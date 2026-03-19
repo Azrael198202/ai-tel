@@ -22,17 +22,38 @@ class OpenAITextResponder:
         user_text: str,
         system_prompt: str | None = None,
         language_hint: str | None = None,
+        # Pass the recent turns from the current session so the reply can build on prior questions.
         conversation_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         cleaned_text = user_text.strip()
         if not cleaned_text:
             return self._error("User text must not be empty.")
 
-        knowledge_reply = self._reply_from_knowledge_base(cleaned_text, language_hint)
-        if knowledge_reply is not None:
-            return knowledge_reply
+        knowledge_chunks = self._find_relevant_knowledge_chunks(cleaned_text)
 
+        # When knowledge matches, let the model rewrite it into a natural reply instead of echoing the source text.
         api_key = self._get_api_key()
+        if knowledge_chunks and api_key:
+            try:
+                OpenAI = self._load_openai_client_class()
+                client = OpenAI(api_key=api_key)
+                knowledge_reply = self._reply_from_knowledge_base(
+                    client=client,
+                    user_text=cleaned_text,
+                    knowledge_chunks=knowledge_chunks,
+                    system_prompt=system_prompt,
+                    language_hint=language_hint,
+                    conversation_history=conversation_history,
+                )
+                if knowledge_reply is not None:
+                    return knowledge_reply
+            except Exception:
+                pass
+        elif knowledge_chunks:
+            knowledge_reply = self._fallback_knowledge_reply(knowledge_chunks, language_hint)
+            if knowledge_reply is not None:
+                return knowledge_reply
+
         if not api_key:
             return self._error("OPENAI_API_KEY is not set.")
 
@@ -43,6 +64,7 @@ class OpenAITextResponder:
 
         client = OpenAI(api_key=api_key)
         messages = [{"role": "system", "content": self._build_system_prompt(system_prompt, language_hint)}]
+        # Keep a short rolling transcript so the assistant can carry context across turns.
         messages.extend(self._sanitize_conversation_history(conversation_history))
         messages.append({"role": "user", "content": cleaned_text})
 
@@ -70,14 +92,15 @@ class OpenAITextResponder:
 
         return result
 
-    def _reply_from_knowledge_base(self, user_text: str, language_hint: str | None) -> dict[str, Any] | None:
+    def _find_relevant_knowledge_chunks(self, user_text: str) -> list[dict[str, str]]:
+        # Keep only the top matches so the knowledge prompt stays focused and concise.
         documents = self._load_knowledge_documents()
         if not documents:
-            return None
+            return []
 
         chunks = self._chunk_documents(documents)
         if not chunks:
-            return None
+            return []
 
         terms = self._build_query_terms(user_text)
         ranked = []
@@ -87,11 +110,68 @@ class OpenAITextResponder:
                 ranked.append((score, chunk))
 
         if not ranked:
-            return None
+            return []
 
         ranked.sort(key=lambda item: item[0], reverse=True)
-        top_chunks = [item[1] for item in ranked[:2]]
-        summary = self._summarize_knowledge_chunks(top_chunks)
+        return [item[1] for item in ranked[:2]]
+
+    def _reply_from_knowledge_base(
+        self,
+        client,
+        user_text: str,
+        # These are the ranked knowledge snippets that the model should rewrite into a natural answer.
+        knowledge_chunks: list[dict[str, str]],
+        system_prompt: str | None,
+        language_hint: str | None,
+        conversation_history: list[dict[str, str]] | None,
+    ) -> dict[str, Any] | None:
+        knowledge_context = self._summarize_knowledge_chunks(knowledge_chunks)
+        if not knowledge_context:
+            return None
+
+        messages = [
+            {
+                "role": "system",
+                "content": self._build_knowledge_system_prompt(system_prompt, language_hint),
+            }
+        ]
+        messages.extend(self._sanitize_conversation_history(conversation_history))
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"User question: {user_text}\n\n"
+                    "Reference information:\n"
+                    f"{knowledge_context}\n\n"
+                    "Please answer naturally based on the reference information."
+                ),
+            }
+        )
+
+        response = client.chat.completions.create(model=self.model, messages=messages)
+        text = self._extract_text(response)
+        if not text:
+            return None
+
+        result = {
+            "status": "success",
+            "text": self._truncate_text(text, self.max_reply_characters),
+            "model": self.model,
+            "language_hint": language_hint,
+            "source": "knowledge_base",
+            "knowledge_files": [chunk["path"] for chunk in knowledge_chunks],
+            "timestamp": self._timestamp(),
+        }
+
+        usage = self._extract_usage(response)
+        if usage is not None:
+            result["usage"] = usage
+
+        return result
+
+    def _fallback_knowledge_reply(self, knowledge_chunks: list[dict[str, str]], language_hint: str | None) -> dict[str, Any] | None:
+        # Fall back to a local summary only when the API is unavailable.
+        summary = self._summarize_knowledge_chunks(knowledge_chunks)
         if not summary:
             return None
 
@@ -101,7 +181,7 @@ class OpenAITextResponder:
             "model": "local-knowledge-base",
             "language_hint": language_hint,
             "source": "knowledge_base",
-            "knowledge_files": [chunk["path"] for chunk in top_chunks],
+            "knowledge_files": [chunk["path"] for chunk in knowledge_chunks],
             "timestamp": self._timestamp(),
         }
 
@@ -143,6 +223,25 @@ class OpenAITextResponder:
                 continue
             sanitized.append({"role": role, "content": content})
         return sanitized
+
+    def _build_knowledge_system_prompt(self, system_prompt: str | None, language_hint: str | None) -> str:
+        base = (
+            "You are a helpful voice assistant. Use the provided reference information, but do not read it verbatim. "
+            "Answer in a natural, human, conversational way with clear logic. "
+            "Keep the reply within 100 characters when possible. "
+            "If the reference is incomplete, say so briefly instead of making things up. "
+            "If the user speaks in Japanese, reply in Japanese. If the user speaks in Chinese, reply in Chinese. "
+            "Otherwise reply in the same language as the user."
+        )
+        hint = self._language_instruction(language_hint)
+        custom = (system_prompt or "").strip()
+
+        parts = [base]
+        if hint:
+            parts.append(hint)
+        if custom:
+            parts.append(f"Additional instruction: {custom}")
+        return "\n".join(parts)
 
     def _build_system_prompt(self, system_prompt: str | None, language_hint: str | None) -> str:
         base = (

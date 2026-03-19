@@ -50,6 +50,7 @@ class VoiceAssistantApp:
         self.system_prompt_var = tk.StringVar(value="Be friendly and helpful.")
         self.status_var = tk.StringVar(value="Ready")
         self.last_speech_file_path: str | None = self._find_latest_reply_wav()
+        # Keep roughly the last 6 turns (user + assistant pairs) for short-term conversation memory.
         self.conversation_history: deque[dict[str, str]] = deque(maxlen=12)
 
         self._build_ui()
@@ -340,6 +341,7 @@ class VoiceAssistantApp:
             user_text=transcript_text,
             system_prompt=self.system_prompt_var.get().strip() or None,
             language_hint=language_hint,
+            # Send the rolling history as a plain list because the responder only needs read access.
             conversation_history=list(self.conversation_history),
         )
         if reply.get("status") != "success":
@@ -352,6 +354,7 @@ class VoiceAssistantApp:
             }
 
         reply_text = str(reply.get("text", "")).strip()
+        # Save the completed turn after a successful reply so the next request can reuse it.
         if transcript_text and reply_text:
             self.conversation_history.append({"role": "user", "content": transcript_text})
             self.conversation_history.append({"role": "assistant", "content": reply_text})

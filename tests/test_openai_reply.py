@@ -54,10 +54,38 @@ def test_openai_text_responder_uses_knowledge_base(monkeypatch) -> None:
     )
     monkeypatch.chdir(temp_root)
 
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    fake_client = _FakeOpenAIClient(api_key="test-key")
+    monkeypatch.setattr(responder, "_load_openai_client_class", lambda: lambda api_key: fake_client)
+
     result = responder.generate_reply("When is burnable trash collected?", language_hint="en")
 
     assert result["status"] == "success"
     assert result["source"] == "knowledge_base"
+    assert result["model"] == "gpt-4o-mini"
+    knowledge_prompt = fake_client.chat.completions.last_kwargs["messages"][-1]["content"]
+    assert "Reference information:" in knowledge_prompt
+    assert "Tuesday and Friday" in knowledge_prompt
+
+
+def test_openai_text_responder_falls_back_to_local_knowledge_without_api_key(monkeypatch) -> None:
+    responder = OpenAITextResponder()
+
+    temp_root = Path("tests_tmp/reply_kb_local")
+    kb_dir = temp_root / "knowledge_base"
+    kb_dir.mkdir(parents=True, exist_ok=True)
+    (kb_dir / "faq.txt").write_text(
+        "Garbage sorting rules:\nBurnable trash is collected on Tuesday and Friday.",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(temp_root)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    result = responder.generate_reply("When is burnable trash collected?", language_hint="en")
+
+    assert result["status"] == "success"
+    assert result["source"] == "knowledge_base"
+    assert result["model"] == "local-knowledge-base"
     assert "Tuesday and Friday" in result["text"]
 
 
