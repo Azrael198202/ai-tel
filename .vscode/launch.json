@@ -1,0 +1,83 @@
+{
+    "version":  "0.2.0",
+    "configurations":  [
+                           {
+                               "name":  "Python: ai_tel CLI",
+                               "type":  "debugpy",
+                               "request":  "launch",
+                               "module":  "ai_tel.cli",
+                               "cwd":  "${workspaceFolder}",
+                               "console":  "integratedTerminal",
+                               "justMyCode":  true,
+                               "envFile":  "${workspaceFolder}/.env",
+                               "env":  {
+                                           "PYTHONPATH":  "${workspaceFolder}/src"
+                                       },
+                               "args":  [
+                                            "analyze",
+                                            "Hello from VS Code"
+                                        ]
+                           },
+                           {
+                               "name":  "Python: ai_tel Listen",
+                               "type":  "debugpy",
+                               "request":  "launch",
+                               "module":  "ai_tel.cli",
+                               "cwd":  "${workspaceFolder}",
+                               "console":  "integratedTerminal",
+                               "justMyCode":  true,
+                               "envFile":  "${workspaceFolder}/.env",
+                               "env":  {
+                                           "PYTHONPATH":  "${workspaceFolder}/src"
+                                       },
+                               "args":  [
+                                            "listen",
+                                            "--timeout",
+                                            "8",
+                                            "--culture",
+                                            "ja-JP",
+                                            "--process",
+                                            "transcript"
+                                        ]
+                           },
+                           {
+                               "name":  "Python: Speech To Text GUI",
+                               "type":  "debugpy",
+                               "request":  "launch",
+                               "module":  "ai_tel.gui",
+                               "cwd":  "${workspaceFolder}",
+                               "console":  "integratedTerminal",
+                               "justMyCode":  true,
+                               "envFile":  "${workspaceFolder}/.env",
+                               "env":  {
+                                           "PYTHONPATH":  "${workspaceFolder}/src"
+                                       }
+                           },
+                           {
+                               "name":  "Python: Text To Speech GUI",
+                               "type":  "debugpy",
+                               "request":  "launch",
+                               "module":  "ai_tel.tts_gui",
+                               "cwd":  "${workspaceFolder}",
+                               "console":  "integratedTerminal",
+                               "justMyCode":  true,
+                               "envFile":  "${workspaceFolder}/.env",
+                               "env":  {
+                                           "PYTHONPATH":  "${workspaceFolder}/src"
+                                       }
+                           },
+                           {
+                               "name":  "Python: Voice Assistant GUI",
+                               "type":  "debugpy",
+                               "request":  "launch",
+                               "module":  "ai_tel.voice_reply_gui",
+                               "cwd":  "${workspaceFolder}",
+                               "console":  "integratedTerminal",
+                               "justMyCode":  true,
+                               "envFile":  "${workspaceFolder}/.env",
+                               "env":  {
+                                           "PYTHONPATH":  "${workspaceFolder}/src"
+                                       }
+                           }
+                       ]
+}

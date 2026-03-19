@@ -67,7 +67,6 @@ def test_openai_transcriber_requires_api_key(monkeypatch) -> None:
     assert "openai_api_key" in result["message"].lower()
 
 
-
 def test_openai_transcriber_reads_api_key_from_dotenv(monkeypatch) -> None:
     recognizer = OpenAISpeechRecognizer()
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -80,7 +79,6 @@ def test_openai_transcriber_reads_api_key_from_dotenv(monkeypatch) -> None:
     assert recognizer._get_api_key() == "test-dotenv-key"
 
 
-
 def test_openai_transcriber_normalizes_culture_to_language_hint() -> None:
     recognizer = OpenAISpeechRecognizer()
 
@@ -88,6 +86,37 @@ def test_openai_transcriber_normalizes_culture_to_language_hint() -> None:
     assert recognizer._normalize_language_hint("en") == "en"
     assert recognizer._normalize_language_hint(None) is None
 
+
+def test_openai_transcriber_builds_default_language_prompt() -> None:
+    recognizer = OpenAISpeechRecognizer()
+
+    prompt = recognizer._build_prompt("ja", None)
+
+    assert prompt is not None
+    assert "Japanese" in prompt
+
+
+def test_openai_transcriber_can_preserve_audio_file() -> None:
+    recognizer = OpenAISpeechRecognizer()
+
+    temp_root = Path("tests_tmp/preserve_audio")
+    temp_root.mkdir(parents=True, exist_ok=True)
+    source = temp_root / "input.wav"
+    source.write_bytes(b"RIFFDATA")
+
+    result = recognizer.preserve_audio_file(source, directory=temp_root / "saved")
+
+    assert result["status"] == "success"
+    saved = Path(result["file_path"])
+    assert saved.exists()
+    assert saved.read_bytes() == b"RIFFDATA"
+
+
+def test_openai_transcriber_detects_quiet_audio() -> None:
+    recognizer = OpenAISpeechRecognizer()
+
+    assert recognizer.has_usable_audio({"peak_level": 0.0002, "rms_level": 0.0001}) is False
+    assert recognizer.has_usable_audio({"peak_level": 0.02, "rms_level": 0.005}) is True
 
 
 def test_openai_transcriber_uses_gpt_4o_transcribe(monkeypatch) -> None:
@@ -101,7 +130,7 @@ def test_openai_transcriber_uses_gpt_4o_transcribe(monkeypatch) -> None:
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     audio_path.write_bytes(b"RIFF")
 
-    result = recognizer.transcribe_audio_file(audio_path, language="ja", prompt="technical terms")
+    result = recognizer.transcribe_audio_file(audio_path, language="ja", prompt="The expected sentence is about daily garbage.")
 
     assert result["status"] == "success"
     assert result["text"] == "hello world"
@@ -110,4 +139,6 @@ def test_openai_transcriber_uses_gpt_4o_transcribe(monkeypatch) -> None:
     assert result["usage"] == {"seconds": 4}
     assert fake_client.audio.transcriptions.last_kwargs["model"] == "gpt-4o-transcribe"
     assert fake_client.audio.transcriptions.last_kwargs["language"] == "ja"
-    assert fake_client.audio.transcriptions.last_kwargs["prompt"] == "technical terms"
+    prompt = fake_client.audio.transcriptions.last_kwargs["prompt"]
+    assert "Japanese" in prompt
+    assert "daily garbage" in prompt

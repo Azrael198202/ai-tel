@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -106,10 +107,11 @@ class OpenAITTS:
 
         file_path = Path(str(result["file_path"]))
         try:
-            self.play_wav_file(file_path)
+            backend = self.play_wav_file(file_path)
         except Exception as exc:
             return self._error(f"Audio playback failed: {exc}")
 
+        result["playback_backend"] = backend
         return result
 
     def resolve_voice_profile(self, gender: str, age_group: str) -> VoiceProfile:
@@ -140,14 +142,46 @@ class OpenAITTS:
             return "The generated WAV file is invalid."
         return None
 
-    def play_wav_file(self, file_path: str | Path) -> None:
+    def play_wav_file(self, file_path: str | Path) -> str:
         path = Path(file_path)
         validation_error = self._validate_wav_file(path)
         if validation_error is not None:
             raise RuntimeError(validation_error)
 
+        winsound_error = None
+        if sys.platform.startswith("win"):
+            try:
+                self._play_with_winsound(path)
+                return "winsound"
+            except Exception as exc:
+                winsound_error = exc
+
+        try:
+            self._play_with_sounddevice(path)
+            return "sounddevice"
+        except Exception as exc:
+            if winsound_error is not None:
+                raise RuntimeError(f"winsound playback failed: {winsound_error}; sounddevice playback failed: {exc}") from exc
+            raise
+
+    def _play_with_winsound(self, file_path: Path) -> None:
+        import winsound
+
+        winsound.PlaySound(str(file_path), winsound.SND_FILENAME)
+
+    def open_wav_with_system_player(self, file_path: str | Path) -> None:
+        path = Path(file_path)
+        validation_error = self._validate_wav_file(path)
+        if validation_error is not None:
+            raise RuntimeError(validation_error)
+        if sys.platform.startswith("win"):
+            os.startfile(str(path))  # type: ignore[attr-defined]
+            return
+        raise RuntimeError("System player launch is only implemented for Windows.")
+
+    def _play_with_sounddevice(self, file_path: Path) -> None:
         sounddevice = self._load_sounddevice_module()
-        with wave.open(str(path), "rb") as wav_file:
+        with wave.open(str(file_path), "rb") as wav_file:
             channels = wav_file.getnchannels()
             sample_rate = wav_file.getframerate()
             sample_width = wav_file.getsampwidth()

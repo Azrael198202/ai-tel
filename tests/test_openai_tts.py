@@ -130,6 +130,7 @@ def test_play_wav_file_uses_sounddevice(monkeypatch) -> None:
         wav_file.setframerate(16000)
         wav_file.writeframes(b"\x00\x00" * 160)
 
+    monkeypatch.setattr(tts, "_play_with_winsound", lambda path: (_ for _ in ()).throw(RuntimeError("winsound unavailable")))
     monkeypatch.setattr(tts, "_load_sounddevice_module", lambda: fake_sounddevice)
 
     tts.play_wav_file(wav_path)

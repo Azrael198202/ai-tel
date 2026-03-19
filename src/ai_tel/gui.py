@@ -1,4 +1,4 @@
-﻿"""Simple desktop GUI for testing microphone transcription."""
+"""Simple desktop GUI for testing microphone transcription."""
 
 from __future__ import annotations
 
@@ -50,7 +50,11 @@ class SpeechTestApp:
         title = ttk.Label(container, text="OpenAI Speech Test", font=("Segoe UI", 16, "bold"))
         title.pack(anchor="w", pady=(10, 0))
 
-        subtitle = ttk.Label(container, text="Click once to start recording. Click again to stop and transcribe with gpt-4o-transcribe.")
+        subtitle = ttk.Label(
+            container,
+            text="Click once to start recording. Click again to stop and transcribe with gpt-4o-transcribe. Japanese, Chinese, and Korean get an automatic prompt hint.",
+            wraplength=700,
+        )
         subtitle.pack(anchor="w", pady=(4, 16))
 
         controls = ttk.Frame(container)
@@ -96,7 +100,7 @@ class SpeechTestApp:
 
         self.is_recording = True
         self.record_button.configure(text="Stop Recording")
-        self._set_status("Recording... click again to stop.")
+        self._set_status(f"Recording at {result.get('sample_rate', 'unknown')} Hz... click again to stop.")
 
     def stop_recording(self) -> None:
         self.record_button.configure(state="disabled")
@@ -110,6 +114,34 @@ class SpeechTestApp:
             return
 
         audio_path = Path(str(recording["file_path"]))
+        preserved = self.recognizer.preserve_audio_file(audio_path)
+
+        audio_payload = {
+            "sample_rate": recording.get("sample_rate"),
+            "duration_seconds": recording.get("duration_seconds"),
+            "trimmed_seconds": recording.get("trimmed_seconds"),
+            "peak_level": recording.get("peak_level"),
+            "rms_level": recording.get("rms_level"),
+        }
+        if preserved.get("status") == "success":
+            audio_payload["saved_file_path"] = preserved.get("file_path")
+        else:
+            audio_payload["save_error"] = preserved.get("message")
+
+        if not self.recognizer.has_usable_audio(recording):
+            try:
+                audio_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            result = {
+                "status": "error",
+                "message": "No voice was detected. Please check the microphone input volume or selected device.",
+                "audio": audio_payload,
+            }
+            self.root.after(0, lambda: self._finish_transcription(result))
+            return
+
         try:
             result = self.recognizer.transcribe_audio_file(
                 audio_path,
@@ -122,6 +154,7 @@ class SpeechTestApp:
             except Exception:
                 pass
 
+        result["audio"] = audio_payload
         self.root.after(0, lambda: self._finish_transcription(result))
 
     def _selected_culture(self) -> str:
@@ -137,11 +170,22 @@ class SpeechTestApp:
         self.record_button.configure(text="Start Recording", state="normal")
 
         if result.get("status") != "success":
-            self._set_status(result.get("message", "Transcription failed."))
+            audio = result.get("audio") or {}
+            saved_file_path = audio.get("saved_file_path")
+            message = result.get("message", "Transcription failed.")
+            if saved_file_path:
+                message = f"{message} Saved WAV: {saved_file_path}"
+            self._set_status(message)
             self._append_output({"error": result})
             return
 
-        self._set_status("Transcription complete.")
+        audio = result.get("audio") or {}
+        rms_level = audio.get("rms_level")
+        saved_file_path = audio.get("saved_file_path")
+        if isinstance(rms_level, (int, float)) and rms_level < 0.015:
+            self._set_status(f"Transcription complete. Audio level was very low, so recognition may be unreliable. Saved WAV: {saved_file_path or 'unavailable'}")
+        else:
+            self._set_status(f"Transcription complete. Saved WAV: {saved_file_path or 'unavailable'}")
         self._append_output(result)
 
     def _open_tts_window(self) -> None:
@@ -163,6 +207,7 @@ class SpeechTestApp:
         self.output.insert("end", json.dumps(payload, ensure_ascii=False, indent=2) + "\n\n")
         self.output.see("end")
         self.output.configure(state="disabled")
+
 
 
 def main() -> None:

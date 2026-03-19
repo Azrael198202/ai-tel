@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import wave
 from datetime import datetime
@@ -16,20 +17,18 @@ class MicrophoneRecorder:
     def __init__(self) -> None:
         self._stream = None
         self._frames = []
-        self._sample_rate = 16000
+        self._sample_rate = 48000
         self._channels = 1
         self._dtype = "int16"
 
     def record_to_wav(
         self,
         duration: int = 8,
-        sample_rate: int = 16000,
+        sample_rate: int | None = None,
         channels: int = 1,
     ) -> dict[str, Any]:
         if duration <= 0:
             return self._error("Duration must be greater than zero.")
-        if sample_rate <= 0:
-            return self._error("Sample rate must be greater than zero.")
         if channels <= 0:
             return self._error("Channels must be greater than zero.")
 
@@ -38,12 +37,16 @@ class MicrophoneRecorder:
         except Exception as exc:
             return self._error(str(exc))
 
-        frames = int(duration * sample_rate)
+        resolved_sample_rate = self._resolve_sample_rate(sounddevice, sample_rate)
+        if resolved_sample_rate <= 0:
+            return self._error("Sample rate must be greater than zero.")
+
+        frames = int(duration * resolved_sample_rate)
 
         try:
             recording = sounddevice.rec(
                 frames,
-                samplerate=sample_rate,
+                samplerate=resolved_sample_rate,
                 channels=channels,
                 dtype=self._dtype,
             )
@@ -51,13 +54,12 @@ class MicrophoneRecorder:
         except Exception as exc:
             return self._error(f"Microphone recording failed: {exc}")
 
-        return self._write_wav_file(recording, sample_rate=sample_rate, channels=channels)
+        self._sample_rate = resolved_sample_rate
+        return self._write_wav_file(recording, sample_rate=resolved_sample_rate, channels=channels)
 
-    def start_recording(self, sample_rate: int = 16000, channels: int = 1) -> dict[str, Any]:
+    def start_recording(self, sample_rate: int | None = None, channels: int = 1) -> dict[str, Any]:
         if self._stream is not None:
             return self._error("Recording is already in progress.")
-        if sample_rate <= 0:
-            return self._error("Sample rate must be greater than zero.")
         if channels <= 0:
             return self._error("Channels must be greater than zero.")
 
@@ -67,7 +69,9 @@ class MicrophoneRecorder:
             return self._error(str(exc))
 
         self._frames = []
-        self._sample_rate = sample_rate
+        self._sample_rate = self._resolve_sample_rate(sounddevice, sample_rate)
+        if self._sample_rate <= 0:
+            return self._error("Sample rate must be greater than zero.")
         self._channels = channels
 
         def callback(indata, frames, time, status) -> None:  # noqa: ARG001
@@ -77,7 +81,7 @@ class MicrophoneRecorder:
 
         try:
             self._stream = sounddevice.InputStream(
-                samplerate=sample_rate,
+                samplerate=self._sample_rate,
                 channels=channels,
                 dtype=self._dtype,
                 callback=callback,
@@ -91,7 +95,7 @@ class MicrophoneRecorder:
         return {
             "status": "success",
             "message": "Recording started.",
-            "sample_rate": sample_rate,
+            "sample_rate": self._sample_rate,
             "channels": channels,
             "timestamp": self._timestamp(),
         }
@@ -125,6 +129,7 @@ class MicrophoneRecorder:
         return self._write_wav_file(recording, sample_rate=self._sample_rate, channels=self._channels)
 
     def _write_wav_file(self, recording, sample_rate: int, channels: int) -> dict[str, Any]:
+        prepared = self._prepare_recording(recording, sample_rate)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
         temp_path = Path(temp_file.name)
         temp_file.close()
@@ -134,7 +139,7 @@ class MicrophoneRecorder:
                 wav_file.setnchannels(channels)
                 wav_file.setsampwidth(2)
                 wav_file.setframerate(sample_rate)
-                wav_file.writeframes(recording.tobytes())
+                wav_file.writeframes(prepared["audio"].tobytes())
         except Exception as exc:
             try:
                 temp_path.unlink(missing_ok=True)
@@ -147,6 +152,10 @@ class MicrophoneRecorder:
             "file_path": str(temp_path),
             "sample_rate": sample_rate,
             "channels": channels,
+            "duration_seconds": prepared["duration_seconds"],
+            "trimmed_seconds": prepared["trimmed_seconds"],
+            "peak_level": prepared["peak_level"],
+            "rms_level": prepared["rms_level"],
             "timestamp": self._timestamp(),
         }
 
@@ -159,6 +168,71 @@ class MicrophoneRecorder:
                 "Audio recording dependencies are missing. Install the project requirements to enable microphone capture."
             ) from exc
         return sounddevice, numpy
+
+    def _resolve_sample_rate(self, sounddevice, sample_rate: int | None) -> int:
+        if sample_rate is not None:
+            return int(sample_rate)
+
+        try:
+            device_info = sounddevice.query_devices(kind="input")
+            default_rate = device_info.get("default_samplerate")
+            if default_rate:
+                return int(default_rate)
+        except Exception:
+            pass
+
+        return 48000
+
+    def _prepare_recording(self, recording, sample_rate: int) -> dict[str, Any]:
+        _, numpy = self._load_audio_dependencies()
+        audio = recording.astype(numpy.float32)
+
+        if audio.ndim == 1:
+            mono = audio
+        else:
+            mono = audio.mean(axis=1)
+
+        if mono.size == 0:
+            return {
+                "audio": recording,
+                "duration_seconds": 0.0,
+                "trimmed_seconds": 0.0,
+                "peak_level": 0.0,
+                "rms_level": 0.0,
+            }
+
+        peak = float(numpy.max(numpy.abs(mono)))
+        silence_threshold = max(peak * 0.02, 500.0)
+        active = numpy.where(numpy.abs(mono) >= silence_threshold)[0]
+
+        trimmed = audio
+        trimmed_seconds = 0.0
+        if active.size > 0:
+            lead_padding = int(sample_rate * 0.1)
+            tail_padding = int(sample_rate * 0.2)
+            start = max(int(active[0]) - lead_padding, 0)
+            end = min(int(active[-1]) + tail_padding + 1, audio.shape[0])
+            trimmed = audio[start:end]
+            trimmed_seconds = max((audio.shape[0] - trimmed.shape[0]) / float(sample_rate), 0.0)
+
+        trimmed_peak = float(numpy.max(numpy.abs(trimmed))) if trimmed.size else 0.0
+        target_peak = 26000.0
+        if 0 < trimmed_peak < target_peak:
+            gain = min(target_peak / trimmed_peak, 8.0)
+            trimmed = trimmed * gain
+
+        clipped = numpy.clip(trimmed, -32768, 32767).astype(numpy.int16)
+        clipped_mono = clipped.astype(numpy.float32)
+        if clipped.ndim > 1:
+            clipped_mono = clipped_mono.mean(axis=1)
+
+        return {
+            "audio": clipped,
+            "duration_seconds": round(clipped.shape[0] / float(sample_rate), 2),
+            "trimmed_seconds": round(trimmed_seconds, 2),
+            "peak_level": round(float(numpy.max(numpy.abs(clipped_mono))) / 32768.0, 4) if clipped.size else 0.0,
+            "rms_level": round(float(numpy.sqrt(numpy.mean(numpy.square(clipped_mono)))) / 32768.0, 4) if clipped.size else 0.0,
+        }
 
     def _error(self, message: str) -> dict[str, Any]:
         return {
@@ -176,6 +250,8 @@ class OpenAISpeechRecognizer:
     """Transcribe recorded audio using OpenAI gpt-4o-transcribe."""
 
     model = "gpt-4o-transcribe"
+    min_detectable_peak_level = 0.003
+    min_detectable_rms_level = 0.001
 
     def __init__(self) -> None:
         self.recorder = MicrophoneRecorder()
@@ -223,8 +299,9 @@ class OpenAISpeechRecognizer:
         kwargs: dict[str, Any] = {"model": self.model}
         if language:
             kwargs["language"] = language
-        if prompt:
-            kwargs["prompt"] = prompt
+        combined_prompt = self._build_prompt(language=language, prompt=prompt)
+        if combined_prompt:
+            kwargs["prompt"] = combined_prompt
 
         try:
             with path.open("rb") as audio_file:
@@ -284,6 +361,44 @@ class OpenAISpeechRecognizer:
             ) from exc
         return OpenAI
 
+    def preserve_audio_file(
+        self,
+        file_path: str | Path,
+        directory: str | Path | None = None,
+        prefix: str = "stt_recording",
+    ) -> dict[str, Any]:
+        source = Path(file_path)
+        if not source.exists():
+            return self._error(f"Audio file not found: {source}")
+
+        target_dir = Path(directory) if directory else Path.cwd() / "recorded_wav"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_name = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+        target_path = target_dir / target_name
+
+        try:
+            shutil.copy2(source, target_path)
+        except Exception as exc:
+            return self._error(f"Failed to preserve audio file: {exc}")
+
+        return {
+            "status": "success",
+            "file_path": str(target_path),
+            "timestamp": self._timestamp(),
+        }
+
+    def has_usable_audio(self, recording: dict[str, Any]) -> bool:
+        peak_level = recording.get("peak_level")
+        rms_level = recording.get("rms_level")
+
+        if not isinstance(peak_level, (int, float)) or not isinstance(rms_level, (int, float)):
+            return True
+
+        return not (
+            peak_level < self.min_detectable_peak_level
+            and rms_level < self.min_detectable_rms_level
+        )
+
     def _extract_text(self, transcription: Any) -> str | None:
         if hasattr(transcription, "text"):
             return transcription.text
@@ -313,6 +428,35 @@ class OpenAISpeechRecognizer:
         if "-" in value:
             return value.split("-", 1)[0].lower()
         return value.lower()
+
+    def _build_prompt(self, language: str | None, prompt: str | None) -> str | None:
+        base_prompt = self._default_prompt_for_language(language)
+        custom_prompt = (prompt or "").strip()
+
+        if base_prompt and custom_prompt:
+            return f"{base_prompt}\nAdditional context: {custom_prompt}"
+        if base_prompt:
+            return base_prompt
+        if custom_prompt:
+            return custom_prompt
+        return None
+
+    def _default_prompt_for_language(self, language: str | None) -> str | None:
+        prompts = {
+            "ja": (
+                "This audio is in Japanese. Transcribe it faithfully in natural Japanese script, "
+                "keeping Japanese words intact and using punctuation when it is clear from the speech."
+            ),
+            "zh": (
+                "This audio is in Chinese. Transcribe it faithfully in natural Chinese characters and "
+                "preserve the original wording as spoken."
+            ),
+            "ko": (
+                "This audio is in Korean. Transcribe it faithfully in natural Korean Hangul and "
+                "preserve the original wording as spoken."
+            ),
+        }
+        return prompts.get(language)
 
     def _error(self, message: str) -> dict[str, Any]:
         return {
