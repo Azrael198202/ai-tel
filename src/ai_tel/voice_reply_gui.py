@@ -40,6 +40,7 @@ class VoiceAssistantApp:
         self.age_var = tk.StringVar(value=AGE_OPTIONS[2][0])
         self.system_prompt_var = tk.StringVar(value="Be friendly and helpful.")
         self.status_var = tk.StringVar(value="Ready")
+        self.last_speech_file_path: str | None = None
 
         self._build_ui()
 
@@ -95,6 +96,10 @@ class VoiceAssistantApp:
 
         self.record_button = ttk.Button(controls, text="Start Conversation", command=self.toggle_conversation)
         self.record_button.grid(row=1, column=3, sticky="e")
+        self.play_last_button = ttk.Button(controls, text="Play Last Reply", command=self.play_last_reply)
+        self.play_last_button.grid(row=1, column=4, padx=(8, 0), sticky="e")
+        self.open_last_button = ttk.Button(controls, text="Open Last WAV", command=self.open_last_reply)
+        self.open_last_button.grid(row=1, column=5, padx=(8, 0), sticky="e")
 
         ttk.Label(container, text="Assistant instruction").pack(anchor="w", pady=(14, 6))
         ttk.Entry(container, textvariable=self.system_prompt_var, width=100).pack(fill="x")
@@ -127,6 +132,55 @@ class VoiceAssistantApp:
         self.conversation_active = False
         self.record_button.configure(state="disabled")
         self._set_status("Stopping conversation mode...")
+
+    def play_last_reply(self) -> None:
+        if not self.last_speech_file_path:
+            self._set_status("No reply audio is available yet.")
+            return
+
+        self.play_last_button.configure(state="disabled")
+        self._set_status("Replaying the last reply...")
+        threading.Thread(target=self._play_last_reply_worker, daemon=True).start()
+
+    def _play_last_reply_worker(self) -> None:
+        path = self.last_speech_file_path
+        if not path:
+            self.root.after(0, lambda: self._finish_manual_playback({"status": "error", "message": "No reply audio is available yet."}))
+            return
+
+        try:
+            backend = self.tts.play_wav_file(path)
+            result = {"status": "success", "file_path": path, "playback_backend": backend}
+        except Exception as exc:
+            result = {"status": "error", "message": f"Manual playback failed: {exc}", "file_path": path}
+        self.root.after(0, lambda payload=result: self._finish_manual_playback(payload))
+
+    def open_last_reply(self) -> None:
+        if not self.last_speech_file_path:
+            self._set_status("No reply audio is available yet.")
+            return
+
+        try:
+            self.tts.open_wav_with_system_player(self.last_speech_file_path)
+        except Exception as exc:
+            self._set_status(f"Failed to open the last reply WAV: {exc}")
+            self._append_output({"open_last_reply": {"status": "error", "message": str(exc), "file_path": self.last_speech_file_path}})
+            return
+
+        self._set_status(f"Opened last reply WAV: {self.last_speech_file_path}")
+        self._append_output({"open_last_reply": {"status": "success", "file_path": self.last_speech_file_path}})
+
+    def _finish_manual_playback(self, result: dict) -> None:
+        self.play_last_button.configure(state="normal")
+        if result.get("status") != "success":
+            self._set_status(result.get("message", "Manual playback failed."))
+            self._append_output({"manual_playback": result})
+            return
+
+        self._set_status(
+            f"Last reply replayed with {result.get('playback_backend', 'unknown')} from {result.get('file_path', '')}"
+        )
+        self._append_output({"manual_playback": result})
 
     def _conversation_loop(self) -> None:
         while self.conversation_active:
@@ -304,6 +358,8 @@ class VoiceAssistantApp:
             "speech": speech,
             "audio": audio_payload,
         }
+        if speech.get("status") == "success" and speech.get("file_path"):
+            self.last_speech_file_path = str(speech.get("file_path"))
         if speech.get("status") != "success":
             result["message"] = speech.get("message", "Failed to generate or play assistant speech.")
         return result
@@ -321,8 +377,9 @@ class VoiceAssistantApp:
 
         transcript_text = str(result.get("transcript", {}).get("text", "")).strip()
         reply_text = str(result.get("reply", {}).get("text", "")).strip()
+        backend = str(result.get("speech", {}).get("playback_backend", "unknown"))
         self._set_status(
-            f"Reply played. Heard: {transcript_text[:40] or 'n/a'} | Replied: {reply_text[:40] or 'n/a'}"
+            f"Reply played with {backend}. Heard: {transcript_text[:24] or 'n/a'} | Replied: {reply_text[:24] or 'n/a'}"
         )
         self._append_output(result)
 
