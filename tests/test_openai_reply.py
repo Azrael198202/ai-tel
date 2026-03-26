@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -7,42 +7,118 @@ from ai_tel.openai_reply import OpenAITextResponder
 
 
 class _FakeMessage:
+    """Test double for Message.
+    """
     def __init__(self, content: str) -> None:
+        """Initialize the _FakeMessage instance.
+        
+        Args:
+            content: Parameter `content` used by this callable.
+        
+        Returns:
+            None.
+        """
         self.content = content
 
 
 class _FakeChoice:
+    """Test double for Choice.
+    """
     def __init__(self, content: str) -> None:
+        """Initialize the _FakeChoice instance.
+        
+        Args:
+            content: Parameter `content` used by this callable.
+        
+        Returns:
+            None.
+        """
         self.message = _FakeMessage(content)
 
 
 class _FakeCompletionResponse:
+    """Test double for CompletionResponse.
+    """
     def __init__(self, content: str) -> None:
+        """Initialize the _FakeCompletionResponse instance.
+        
+        Args:
+            content: Parameter `content` used by this callable.
+        
+        Returns:
+            None.
+        """
         self.choices = [_FakeChoice(content)]
         self.usage = {"total_tokens": 12}
 
 
 class _FakeChatCompletionsApi:
+    """Test double for ChatCompletionsApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeChatCompletionsApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.last_kwargs = None
 
     def create(self, **kwargs):
+        """Create.
+        
+        Args:
+            kwargs: Additional keyword arguments passed through the helper.
+        
+        Returns:
+            The result produced by this callable.
+        """
         self.last_kwargs = kwargs
         return _FakeCompletionResponse("Hello, I can help with that.")
 
 
 class _FakeChatApi:
+    """Test double for ChatApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeChatApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.completions = _FakeChatCompletionsApi()
 
 
 class _FakeOpenAIClient:
+    """Test double for OpenAIClient.
+    """
     def __init__(self, api_key: str) -> None:
+        """Initialize the _FakeOpenAIClient instance.
+        
+        Args:
+            api_key: OpenAI API key value.
+        
+        Returns:
+            None.
+        """
         self.api_key = api_key
         self.chat = _FakeChatApi()
 
 
 def test_openai_text_responder_uses_knowledge_base(monkeypatch) -> None:
+    """Test that openai text responder uses knowledge base.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     responder = OpenAITextResponder()
 
     temp_root = Path("tests_tmp/reply_kb")
@@ -69,6 +145,14 @@ def test_openai_text_responder_uses_knowledge_base(monkeypatch) -> None:
 
 
 def test_openai_text_responder_falls_back_to_local_knowledge_without_api_key(monkeypatch) -> None:
+    """Test that openai text responder falls back to local knowledge without api key.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     responder = OpenAITextResponder()
 
     temp_root = Path("tests_tmp/reply_kb_local")
@@ -90,6 +174,14 @@ def test_openai_text_responder_falls_back_to_local_knowledge_without_api_key(mon
 
 
 def test_openai_text_responder_requires_api_key(monkeypatch) -> None:
+    """Test that openai text responder requires api key.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     responder = OpenAITextResponder()
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -104,6 +196,14 @@ def test_openai_text_responder_requires_api_key(monkeypatch) -> None:
 
 
 def test_openai_text_responder_generates_reply(monkeypatch) -> None:
+    """Test that openai text responder generates reply.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     responder = OpenAITextResponder()
     fake_client = _FakeOpenAIClient(api_key="test-key")
 
@@ -132,6 +232,14 @@ def test_openai_text_responder_generates_reply(monkeypatch) -> None:
 
 
 def test_openai_text_responder_includes_conversation_history(monkeypatch) -> None:
+    """Test that openai text responder includes conversation history.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     responder = OpenAITextResponder()
     fake_client = _FakeOpenAIClient(api_key="test-key")
 

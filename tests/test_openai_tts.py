@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import sys
 import wave
 
@@ -8,54 +8,155 @@ from ai_tel.openai_tts import OpenAITTS
 
 
 class _FakeSpeechResponse:
+    """Test double for SpeechResponse.
+    """
     def __enter__(self):
+        """Enter .
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        """Exit .
+        
+        Args:
+            exc_type: Exception type used by the context manager.
+            exc: Exception instance used by the context manager.
+            tb: Traceback used by the context manager.
+        
+        Returns:
+            The result produced by this callable.
+        """
         return False
 
     def stream_to_file(self, path):
+        """Stream to file.
+        
+        Args:
+            path: Parameter `path` used by this callable.
+        
+        Returns:
+            The result produced by this callable.
+        """
         Path(path).write_bytes(b"RIFF" + b"0" * 64)
 
 
 class _FakeSpeechApi:
+    """Test double for SpeechApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeSpeechApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.last_kwargs = None
         self.with_streaming_response = self
 
     def create(self, **kwargs):
+        """Create.
+        
+        Args:
+            kwargs: Additional keyword arguments passed through the helper.
+        
+        Returns:
+            The result produced by this callable.
+        """
         self.last_kwargs = kwargs
         return _FakeSpeechResponse()
 
 
 class _FakeAudioApi:
+    """Test double for AudioApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeAudioApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.speech = _FakeSpeechApi()
 
 
 class _FakeOpenAIClient:
+    """Test double for OpenAIClient.
+    """
     def __init__(self, api_key: str) -> None:
+        """Initialize the _FakeOpenAIClient instance.
+        
+        Args:
+            api_key: OpenAI API key value.
+        
+        Returns:
+            None.
+        """
         self.api_key = api_key
         self.audio = _FakeAudioApi()
 
 
 class _FakeSoundDevice:
+    """Test double for SoundDevice.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeSoundDevice instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.play_called = False
         self.wait_called = False
         self.last_audio = None
         self.last_sample_rate = None
 
     def play(self, audio, sample_rate) -> None:
+        """Play.
+        
+        Args:
+            audio: Audio array or payload used for playback.
+            sample_rate: Requested or detected audio sample rate.
+        
+        Returns:
+            None.
+        """
         self.play_called = True
         self.last_audio = audio
         self.last_sample_rate = sample_rate
 
     def wait(self) -> None:
+        """Wait.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.wait_called = True
 
 
 def test_resolve_voice_profile_returns_requested_profile() -> None:
+    """Test that resolve voice profile returns requested profile.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
 
     profile = tts.resolve_voice_profile(gender="female", age_group="senior")
@@ -66,6 +167,14 @@ def test_resolve_voice_profile_returns_requested_profile() -> None:
 
 
 def test_resolve_voice_profile_falls_back_to_neutral_adult() -> None:
+    """Test that resolve voice profile falls back to neutral adult.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
 
     profile = tts.resolve_voice_profile(gender="unknown", age_group="unknown")
@@ -76,6 +185,14 @@ def test_resolve_voice_profile_falls_back_to_neutral_adult() -> None:
 
 
 def test_validate_wav_file_rejects_incomplete_output() -> None:
+    """Test that validate wav file rejects incomplete output.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
     test_dir = Path("tests_tmp/tts_validation")
     test_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +206,14 @@ def test_validate_wav_file_rejects_incomplete_output() -> None:
 
 
 def test_synthesize_to_wav_uses_gpt_4o_mini_tts(monkeypatch) -> None:
+    """Test that synthesize to wav uses gpt 4o mini tts.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
     fake_client = _FakeOpenAIClient(api_key="test-key")
 
@@ -108,6 +233,14 @@ def test_synthesize_to_wav_uses_gpt_4o_mini_tts(monkeypatch) -> None:
 
 
 def test_synthesize_to_wav_rejects_empty_text() -> None:
+    """Test that synthesize to wav rejects empty text.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
 
     result = tts.synthesize_to_wav("   ")
@@ -117,6 +250,14 @@ def test_synthesize_to_wav_rejects_empty_text() -> None:
 
 
 def test_play_wav_file_uses_sounddevice(monkeypatch) -> None:
+    """Test that play wav file uses sounddevice.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
     fake_sounddevice = _FakeSoundDevice()
     test_dir = Path("tests_tmp/tts_playback")
@@ -140,6 +281,14 @@ def test_play_wav_file_uses_sounddevice(monkeypatch) -> None:
 
 
 def test_play_wav_file_falls_back_to_winsound_on_windows(monkeypatch) -> None:
+    """Test that play wav file falls back to winsound on windows.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     tts = OpenAITTS()
     test_dir = Path("tests_tmp/tts_playback")
     test_dir.mkdir(parents=True, exist_ok=True)

@@ -15,6 +15,14 @@ class MicrophoneRecorder:
     """Record audio from the default microphone into a WAV file."""
 
     def __init__(self) -> None:
+        """Initialize the MicrophoneRecorder instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self._stream = None
         self._frames = []
         self._sample_rate = 48000
@@ -27,6 +35,16 @@ class MicrophoneRecorder:
         sample_rate: int | None = None,
         channels: int = 1,
     ) -> dict[str, Any]:
+        """Record to wav.
+        
+        Args:
+            duration: Recording duration in seconds.
+            sample_rate: Requested or detected audio sample rate.
+            channels: Number of audio channels to use.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         if duration <= 0:
             return self._error("Duration must be greater than zero.")
         if channels <= 0:
@@ -58,6 +76,15 @@ class MicrophoneRecorder:
         return self._write_wav_file(recording, sample_rate=resolved_sample_rate, channels=channels)
 
     def start_recording(self, sample_rate: int | None = None, channels: int = 1) -> dict[str, Any]:
+        """Start recording.
+        
+        Args:
+            sample_rate: Requested or detected audio sample rate.
+            channels: Number of audio channels to use.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         if self._stream is not None:
             return self._error("Recording is already in progress.")
         if channels <= 0:
@@ -75,6 +102,17 @@ class MicrophoneRecorder:
         self._channels = channels
 
         def callback(indata, frames, time, status) -> None:  # noqa: ARG001
+            """Callback.
+            
+            Args:
+                indata: Input audio buffer from the callback.
+                frames: Number of audio frames in the callback.
+                time: Timing metadata provided by the audio callback.
+                status: Status value reported by the operation or callback.
+            
+            Returns:
+                None.
+            """
             if status:
                 return
             self._frames.append(indata.copy())
@@ -101,6 +139,14 @@ class MicrophoneRecorder:
         }
 
     def stop_recording_to_wav(self) -> dict[str, Any]:
+        """Stop recording to wav.
+        
+        Args:
+            None.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         if self._stream is None:
             return self._error("Recording has not been started.")
 
@@ -129,6 +175,16 @@ class MicrophoneRecorder:
         return self._write_wav_file(recording, sample_rate=self._sample_rate, channels=self._channels)
 
     def _write_wav_file(self, recording, sample_rate: int, channels: int) -> dict[str, Any]:
+        """Write wav file.
+        
+        Args:
+            recording: Recording payload used for downstream processing.
+            sample_rate: Requested or detected audio sample rate.
+            channels: Number of audio channels to use.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         prepared = self._prepare_recording(recording, sample_rate)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
         temp_path = Path(temp_file.name)
@@ -160,6 +216,14 @@ class MicrophoneRecorder:
         }
 
     def _load_audio_dependencies(self):
+        """Load audio dependencies.
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         try:
             import numpy
             import sounddevice  # type: ignore
@@ -170,6 +234,15 @@ class MicrophoneRecorder:
         return sounddevice, numpy
 
     def _resolve_sample_rate(self, sounddevice, sample_rate: int | None) -> int:
+        """Resolve sample rate.
+        
+        Args:
+            sounddevice: Imported sounddevice module.
+            sample_rate: Requested or detected audio sample rate.
+        
+        Returns:
+            The int value produced by this callable.
+        """
         if sample_rate is not None:
             return int(sample_rate)
 
@@ -184,6 +257,15 @@ class MicrophoneRecorder:
         return 48000
 
     def _prepare_recording(self, recording, sample_rate: int) -> dict[str, Any]:
+        """Prepare recording.
+        
+        Args:
+            recording: Recording payload used for downstream processing.
+            sample_rate: Requested or detected audio sample rate.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         _, numpy = self._load_audio_dependencies()
         audio = recording.astype(numpy.float32)
 
@@ -235,6 +317,14 @@ class MicrophoneRecorder:
         }
 
     def _error(self, message: str) -> dict[str, Any]:
+        """Error.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         return {
             "status": "error",
             "message": message,
@@ -243,6 +333,14 @@ class MicrophoneRecorder:
 
     @staticmethod
     def _timestamp() -> str:
+        """Timestamp.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         return datetime.now().isoformat(timespec="seconds")
 
 
@@ -254,9 +352,27 @@ class OpenAISpeechRecognizer:
     min_detectable_rms_level = 0.001
 
     def __init__(self) -> None:
+        """Initialize the OpenAISpeechRecognizer instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.recorder = MicrophoneRecorder()
 
     def listen_once(self, timeout: int = 8, culture: str | None = None, prompt: str | None = None) -> dict[str, Any]:
+        """Listen once.
+        
+        Args:
+            timeout: Parameter `timeout` used by this callable.
+            culture: Culture code such as ja-JP or en-US.
+            prompt: Prompt text used for generation or transcription.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         recording = self.recorder.record_to_wav(duration=timeout)
         if recording.get("status") != "success":
             return recording
@@ -282,6 +398,16 @@ class OpenAISpeechRecognizer:
         language: str | None = None,
         prompt: str | None = None,
     ) -> dict[str, Any]:
+        """Transcribe audio file.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+            language: Language or language hint value.
+            prompt: Prompt text used for generation or transcription.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         api_key = self._get_api_key()
         if not api_key:
             return self._error("OPENAI_API_KEY is not set.")
@@ -328,6 +454,14 @@ class OpenAISpeechRecognizer:
         return result
 
     def _get_api_key(self) -> str | None:
+        """Get api key.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
             return api_key
@@ -353,6 +487,14 @@ class OpenAISpeechRecognizer:
         return None
 
     def _load_openai_client_class(self):
+        """Load openai client class.
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:
@@ -367,6 +509,16 @@ class OpenAISpeechRecognizer:
         directory: str | Path | None = None,
         prefix: str = "stt_recording",
     ) -> dict[str, Any]:
+        """Preserve audio file.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+            directory: Parameter `directory` used by this callable.
+            prefix: Parameter `prefix` used by this callable.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         source = Path(file_path)
         if not source.exists():
             return self._error(f"Audio file not found: {source}")
@@ -388,6 +540,14 @@ class OpenAISpeechRecognizer:
         }
 
     def has_usable_audio(self, recording: dict[str, Any]) -> bool:
+        """Has usable audio.
+        
+        Args:
+            recording: Recording payload used for downstream processing.
+        
+        Returns:
+            The bool value produced by this callable.
+        """
         peak_level = recording.get("peak_level")
         rms_level = recording.get("rms_level")
 
@@ -400,6 +560,14 @@ class OpenAISpeechRecognizer:
         )
 
     def _extract_text(self, transcription: Any) -> str | None:
+        """Extract text.
+        
+        Args:
+            transcription: Transcription response object to inspect.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         if hasattr(transcription, "text"):
             return transcription.text
         if isinstance(transcription, dict):
@@ -407,6 +575,14 @@ class OpenAISpeechRecognizer:
         return None
 
     def _extract_usage(self, transcription: Any) -> dict[str, Any] | None:
+        """Extract usage.
+        
+        Args:
+            transcription: Transcription response object to inspect.
+        
+        Returns:
+            The dict[str, Any] | None value produced by this callable.
+        """
         usage = getattr(transcription, "usage", None)
         if usage is not None:
             if hasattr(usage, "model_dump"):
@@ -420,6 +596,14 @@ class OpenAISpeechRecognizer:
         return None
 
     def _normalize_language_hint(self, culture: str | None) -> str | None:
+        """Normalize language hint.
+        
+        Args:
+            culture: Culture code such as ja-JP or en-US.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         if not culture:
             return None
         value = culture.strip()
@@ -430,6 +614,15 @@ class OpenAISpeechRecognizer:
         return value.lower()
 
     def _build_prompt(self, language: str | None, prompt: str | None) -> str | None:
+        """Build prompt.
+        
+        Args:
+            language: Language or language hint value.
+            prompt: Prompt text used for generation or transcription.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         base_prompt = self._default_prompt_for_language(language)
         custom_prompt = (prompt or "").strip()
 
@@ -442,6 +635,14 @@ class OpenAISpeechRecognizer:
         return None
 
     def _default_prompt_for_language(self, language: str | None) -> str | None:
+        """Build prompt for language.
+        
+        Args:
+            language: Language or language hint value.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         prompts = {
             "ja": (
                 "This audio is in Japanese. Transcribe it faithfully in natural Japanese script, "
@@ -459,6 +660,14 @@ class OpenAISpeechRecognizer:
         return prompts.get(language)
 
     def _error(self, message: str) -> dict[str, Any]:
+        """Error.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         return {
             "status": "error",
             "message": message,
@@ -467,4 +676,12 @@ class OpenAISpeechRecognizer:
 
     @staticmethod
     def _timestamp() -> str:
+        """Timestamp.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         return datetime.now().isoformat(timespec="seconds")

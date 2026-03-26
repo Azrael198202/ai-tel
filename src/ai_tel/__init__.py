@@ -1,4 +1,4 @@
-﻿"""Public package interface for ai-tel."""
+"""Public package interface for ai-tel."""
 
 from .openai_speech import MicrophoneRecorder, OpenAISpeechRecognizer
 from .openai_tts import OpenAITTS, VoiceProfile

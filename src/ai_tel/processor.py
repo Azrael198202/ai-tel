@@ -47,9 +47,25 @@ class AITextProcessor:
     _WORD_RE = re.compile(r"\b\w+\b", re.UNICODE)
 
     def __init__(self) -> None:
+        """Initialize the AITextProcessor instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.processing_history: list[dict[str, Any]] = []
 
     def detect_language(self, text: str) -> dict[str, Any]:
+        """Detect language.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         cleaned_text = text.strip()
         if not cleaned_text:
             return self._error("Text must not be empty.")
@@ -72,6 +88,14 @@ class AITextProcessor:
         return result
 
     def analyze_text(self, text: str) -> dict[str, Any]:
+        """Analyze text.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         cleaned_text = text.strip()
         if not cleaned_text:
             return self._error("Text must not be empty.")
@@ -98,6 +122,16 @@ class AITextProcessor:
         return result
 
     def generate_text(self, prompt: str, language: str = "english", length: int = 100) -> dict[str, Any]:
+        """Generate text.
+        
+        Args:
+            prompt: Prompt text used for generation or transcription.
+            language: Language or language hint value.
+            length: Requested output length.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         cleaned_prompt = prompt.strip()
         if not cleaned_prompt:
             return self._error("Prompt must not be empty.")
@@ -121,19 +155,59 @@ class AITextProcessor:
         return result
 
     def get_history(self) -> list[dict[str, Any]]:
+        """Get history.
+        
+        Args:
+            None.
+        
+        Returns:
+            The list[dict[str, Any]] value produced by this callable.
+        """
         return list(self.processing_history)
 
     def clear_history(self) -> None:
+        """Clear history.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.processing_history = []
 
     def _count_sentences(self, text: str) -> int:
+        """Count sentences.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            The int value produced by this callable.
+        """
         parts = [part for part in self._SENTENCE_SPLIT_RE.split(text) if part.strip()]
         return max(1, len(parts))
 
     def _count_words(self, text: str) -> int:
+        """Count words.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            The int value produced by this callable.
+        """
         return len(self._WORD_RE.findall(text))
 
     def _error(self, message: str) -> dict[str, Any]:
+        """Error.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         return {
             "status": "error",
             "message": message,
@@ -142,4 +216,12 @@ class AITextProcessor:
 
     @staticmethod
     def _timestamp() -> str:
+        """Timestamp.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         return datetime.now().isoformat(timespec="seconds")

@@ -1,4 +1,4 @@
-﻿"""OpenAI text response helpers for the voice assistant UI."""
+"""OpenAI text response helpers for the voice assistant UI."""
 
 from __future__ import annotations
 
@@ -25,6 +25,17 @@ class OpenAITextResponder:
         # Pass the recent turns from the current session so the reply can build on prior questions.
         conversation_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
+        """Generate reply.
+        
+        Args:
+            user_text: Text spoken by the user.
+            system_prompt: Optional system instruction for the model.
+            language_hint: Optional language hint for the current request.
+            conversation_history: Recent conversation messages used as context.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         cleaned_text = user_text.strip()
         if not cleaned_text:
             return self._error("User text must not be empty.")
@@ -94,6 +105,14 @@ class OpenAITextResponder:
 
     def _find_relevant_knowledge_chunks(self, user_text: str) -> list[dict[str, str]]:
         # Keep only the top matches so the knowledge prompt stays focused and concise.
+        """Find relevant knowledge chunks.
+        
+        Args:
+            user_text: Text spoken by the user.
+        
+        Returns:
+            The list[dict[str, str]] value produced by this callable.
+        """
         documents = self._load_knowledge_documents()
         if not documents:
             return []
@@ -125,6 +144,19 @@ class OpenAITextResponder:
         language_hint: str | None,
         conversation_history: list[dict[str, str]] | None,
     ) -> dict[str, Any] | None:
+        """Generate from knowledge base.
+        
+        Args:
+            client: OpenAI client instance used for API calls.
+            user_text: Text spoken by the user.
+            knowledge_chunks: Relevant knowledge chunks for reply generation.
+            system_prompt: Optional system instruction for the model.
+            language_hint: Optional language hint for the current request.
+            conversation_history: Recent conversation messages used as context.
+        
+        Returns:
+            The dict[str, Any] | None value produced by this callable.
+        """
         knowledge_context = self._summarize_knowledge_chunks(knowledge_chunks)
         if not knowledge_context:
             return None
@@ -171,6 +203,15 @@ class OpenAITextResponder:
 
     def _fallback_knowledge_reply(self, knowledge_chunks: list[dict[str, str]], language_hint: str | None) -> dict[str, Any] | None:
         # Fall back to a local summary only when the API is unavailable.
+        """Generate knowledge reply.
+        
+        Args:
+            knowledge_chunks: Relevant knowledge chunks for reply generation.
+            language_hint: Optional language hint for the current request.
+        
+        Returns:
+            The dict[str, Any] | None value produced by this callable.
+        """
         summary = self._summarize_knowledge_chunks(knowledge_chunks)
         if not summary:
             return None
@@ -186,6 +227,14 @@ class OpenAITextResponder:
         }
 
     def _load_knowledge_documents(self) -> list[dict[str, str]]:
+        """Load knowledge documents.
+        
+        Args:
+            None.
+        
+        Returns:
+            The list[dict[str, str]] value produced by this callable.
+        """
         base_dir = Path.cwd() / self.knowledge_base_dir_name
         if not base_dir.exists():
             return []
@@ -202,6 +251,14 @@ class OpenAITextResponder:
         return documents
 
     def _chunk_documents(self, documents: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Chunk documents.
+        
+        Args:
+            documents: Knowledge-base documents to process.
+        
+        Returns:
+            The list[dict[str, str]] value produced by this callable.
+        """
         chunks: list[dict[str, str]] = []
         for document in documents:
             parts = [part.strip() for part in re.split(r"\n\s*\n", document["content"]) if part.strip()]
@@ -212,6 +269,14 @@ class OpenAITextResponder:
         return chunks
 
     def _sanitize_conversation_history(self, conversation_history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+        """Sanitize conversation history.
+        
+        Args:
+            conversation_history: Recent conversation messages used as context.
+        
+        Returns:
+            The list[dict[str, str]] value produced by this callable.
+        """
         if not conversation_history:
             return []
 
@@ -225,6 +290,15 @@ class OpenAITextResponder:
         return sanitized
 
     def _build_knowledge_system_prompt(self, system_prompt: str | None, language_hint: str | None) -> str:
+        """Build knowledge system prompt.
+        
+        Args:
+            system_prompt: Optional system instruction for the model.
+            language_hint: Optional language hint for the current request.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         base = (
             "You are a helpful voice assistant. Use the provided reference information, but do not read it verbatim. "
             "Answer in a natural, human, conversational way with clear logic. "
@@ -244,6 +318,15 @@ class OpenAITextResponder:
         return "\n".join(parts)
 
     def _build_system_prompt(self, system_prompt: str | None, language_hint: str | None) -> str:
+        """Build system prompt.
+        
+        Args:
+            system_prompt: Optional system instruction for the model.
+            language_hint: Optional language hint for the current request.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         base = (
             "You are a helpful voice assistant. Reply clearly, naturally, and briefly. "
             "Keep the reply within 100 characters. "
@@ -261,6 +344,14 @@ class OpenAITextResponder:
         return "\n".join(parts)
 
     def _language_instruction(self, language_hint: str | None) -> str | None:
+        """Language instruction.
+        
+        Args:
+            language_hint: Optional language hint for the current request.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         mapping = {
             "ja": "Prefer replying in Japanese unless the user clearly asks for another language.",
             "zh": "Prefer replying in Chinese unless the user clearly asks for another language.",
@@ -271,6 +362,14 @@ class OpenAITextResponder:
         return mapping.get((language_hint or "").strip().lower())
 
     def _build_query_terms(self, text: str) -> list[str]:
+        """Build query terms.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            The list[str] value produced by this callable.
+        """
         terms: list[str] = []
         lowered = text.lower()
 
@@ -291,6 +390,15 @@ class OpenAITextResponder:
         return terms
 
     def _score_chunk(self, chunk: str, terms: list[str]) -> int:
+        """Score chunk.
+        
+        Args:
+            chunk: Audio chunk used for level analysis.
+            terms: Search terms derived from input text.
+        
+        Returns:
+            The int value produced by this callable.
+        """
         haystack = chunk.lower()
         score = 0
         for term in terms:
@@ -299,6 +407,14 @@ class OpenAITextResponder:
         return score
 
     def _summarize_knowledge_chunks(self, chunks: list[dict[str, str]]) -> str:
+        """Summarize knowledge chunks.
+        
+        Args:
+            chunks: Knowledge-base chunks to summarize or inspect.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         texts = []
         for chunk in chunks:
             content = re.sub(r"\s+", " ", chunk["content"]).strip()
@@ -311,6 +427,14 @@ class OpenAITextResponder:
         return " ".join(texts)
 
     def _get_api_key(self) -> str | None:
+        """Get api key.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
             return api_key
@@ -336,6 +460,14 @@ class OpenAITextResponder:
         return None
 
     def _load_openai_client_class(self):
+        """Load openai client class.
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:
@@ -345,6 +477,14 @@ class OpenAITextResponder:
         return OpenAI
 
     def _extract_text(self, response: Any) -> str | None:
+        """Extract text.
+        
+        Args:
+            response: Model response object to inspect.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         if hasattr(response, "choices"):
             choices = getattr(response, "choices")
             if choices:
@@ -365,12 +505,29 @@ class OpenAITextResponder:
 
     @staticmethod
     def _truncate_text(text: str, limit: int) -> str:
+        """Truncate text.
+        
+        Args:
+            text: Input text handled by the current operation.
+            limit: Parameter `limit` used by this callable.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         cleaned = text.strip()
         if limit <= 0 or len(cleaned) <= limit:
             return cleaned
         return cleaned[:limit].rstrip()
 
     def _extract_usage(self, response: Any) -> dict[str, Any] | None:
+        """Extract usage.
+        
+        Args:
+            response: Model response object to inspect.
+        
+        Returns:
+            The dict[str, Any] | None value produced by this callable.
+        """
         usage = getattr(response, "usage", None)
         if usage is not None:
             if hasattr(usage, "model_dump"):
@@ -384,6 +541,14 @@ class OpenAITextResponder:
         return None
 
     def _error(self, message: str) -> dict[str, Any]:
+        """Error.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         return {
             "status": "error",
             "message": message,
@@ -392,4 +557,12 @@ class OpenAITextResponder:
 
     @staticmethod
     def _timestamp() -> str:
+        """Timestamp.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         return datetime.now().isoformat(timespec="seconds")

@@ -1,0 +1,20 @@
+Conversation transcript
+Started: 2026-03-19 16:26:32
+Stopped: 2026-03-19 16:28:03
+Saved to: E:\lwpw\ai-tel\conversation_logs\conversation_20260319_162632.txt
+
+Turn 1
+User: 会話は中国語だよ。
+Assistant: 好的！这家公司专注于为日本企业提供IT服务，支持多语言，包括中文和日文。他们还拥有离岸开发体系，能在成本和质量之间取得良好平衡。有什么想了解的具体内容吗？
+
+Turn 2
+User: 一緒らしいな。
+Assistant: そうですね！どんなことに興味がありますか？
+
+Turn 3
+User: 你说的是哪家。
+Assistant: 具体公司名称我没有提供，如果你有特定需求，可以告诉我！
+
+Turn 4
+User: 履历之所。
+Assistant: 履历表通常包含个人信息、教育经历、工作经历和技能。你需要帮助写吗？

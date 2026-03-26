@@ -1,4 +1,4 @@
-﻿"""Simple desktop GUI for testing text-to-speech."""
+"""Simple desktop GUI for testing text-to-speech."""
 
 from __future__ import annotations
 
@@ -25,7 +25,17 @@ AGE_OPTIONS = [
 
 
 class TTSTestApp:
+    """Provide the ttstest app component.
+    """
     def __init__(self, root: tk.Tk) -> None:
+        """Initialize the TTSTestApp instance.
+        
+        Args:
+            root: Tk root window used by the UI.
+        
+        Returns:
+            None.
+        """
         self.root = root
         self.root.title("AI Text To Speech Test")
         self.root.geometry("780x560")
@@ -41,6 +51,14 @@ class TTSTestApp:
         self._build_ui()
 
     def _build_ui(self) -> None:
+        """Build ui.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         container = ttk.Frame(self.root, padding=16)
         container.pack(fill="both", expand=True)
 
@@ -49,7 +67,7 @@ class TTSTestApp:
         ttk.Label(nav, text="Text To Speech", font=("Segoe UI", 10, "bold")).pack(side="left")
         ttk.Button(nav, text="Go To Speech To Text", command=self._open_stt_window).pack(side="right")
 
-        title = ttk.Label(container, text="OpenAI Text To Speech Test", font=("Segoe UI", 16, "bold"))
+        title = ttk.Label(container, text="Text To Speech Test", font=("Segoe UI", 16, "bold"))
         title.pack(anchor="w", pady=(10, 0))
 
         subtitle = ttk.Label(container, text="Enter text, choose gender and age style, then play generated speech.")
@@ -96,6 +114,14 @@ class TTSTestApp:
         self.output.configure(state="disabled")
 
     def generate_and_play(self) -> None:
+        """Generate and play.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         text = self.input_text.get("1.0", "end").strip()
         if not text:
             self._set_status("Please enter some text first.")
@@ -106,6 +132,14 @@ class TTSTestApp:
         threading.Thread(target=self._generate_and_play_worker, args=(text,), daemon=True).start()
 
     def _generate_and_play_worker(self, text: str) -> None:
+        """Generate and play worker.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            None.
+        """
         result = self.tts.speak_text(
             text=text,
             gender=self.gender_map.get(self.gender_var.get(), "neutral"),
@@ -114,6 +148,14 @@ class TTSTestApp:
         self.root.after(0, lambda: self._finish(result))
 
     def _finish(self, result: dict) -> None:
+        """Finalize.
+        
+        Args:
+            result: Result payload produced by a previous step.
+        
+        Returns:
+            None.
+        """
         self.play_button.configure(state="normal")
 
         if result.get("status") != "success":
@@ -125,6 +167,14 @@ class TTSTestApp:
         self._append_output(result)
 
     def _open_stt_window(self) -> None:
+        """Open stt window.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         from .gui import SpeechTestApp
 
         self.root.destroy()
@@ -133,9 +183,25 @@ class TTSTestApp:
         new_root.mainloop()
 
     def _set_status(self, message: str) -> None:
+        """Set status.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            None.
+        """
         self.status_var.set(message)
 
     def _append_output(self, payload: dict) -> None:
+        """Append output.
+        
+        Args:
+            payload: Structured payload to render or process.
+        
+        Returns:
+            None.
+        """
         self.output.configure(state="normal")
         self.output.insert("end", json.dumps(payload, ensure_ascii=False, indent=2) + "\n\n")
         self.output.see("end")
@@ -143,6 +209,14 @@ class TTSTestApp:
 
 
 def main() -> None:
+    """Main.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     root = tk.Tk()
     TTSTestApp(root)
     root.mainloop()

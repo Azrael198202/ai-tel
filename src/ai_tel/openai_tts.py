@@ -1,4 +1,4 @@
-﻿"""OpenAI text-to-speech helpers."""
+"""OpenAI text-to-speech helpers."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ import numpy as np
 
 @dataclass(frozen=True)
 class VoiceProfile:
+    """Provide the voice profile component.
+    """
     gender: str
     age_group: str
     voice: str
@@ -44,6 +46,16 @@ class OpenAITTS:
     output_dir_name = "generated_wav"
 
     def synthesize_to_wav(self, text: str, gender: str = "neutral", age_group: str = "adult") -> dict[str, Any]:
+        """Synthesize to wav.
+        
+        Args:
+            text: Input text handled by the current operation.
+            gender: Requested voice gender setting.
+            age_group: Requested voice age group setting.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         cleaned_text = text.strip()
         if not cleaned_text:
             return self._error("Text must not be empty.")
@@ -87,7 +99,7 @@ class OpenAITTS:
                 final_path.unlink(missing_ok=True)
             except Exception:
                 pass
-            return self._error(f"OpenAI speech generation failed: {exc}")
+            return self._error(f"Speech generation failed: {exc}")
 
         return {
             "status": "success",
@@ -100,6 +112,16 @@ class OpenAITTS:
         }
 
     def speak_text(self, text: str, gender: str = "neutral", age_group: str = "adult") -> dict[str, Any]:
+        """Generate and play text.
+        
+        Args:
+            text: Input text handled by the current operation.
+            gender: Requested voice gender setting.
+            age_group: Requested voice age group setting.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         result = self.synthesize_to_wav(text=text, gender=gender, age_group=age_group)
         if result.get("status") != "success":
             return result
@@ -114,20 +136,54 @@ class OpenAITTS:
         return result
 
     def resolve_voice_profile(self, gender: str, age_group: str) -> VoiceProfile:
+        """Resolve voice profile.
+        
+        Args:
+            gender: Requested voice gender setting.
+            age_group: Requested voice age group setting.
+        
+        Returns:
+            The VoiceProfile value produced by this callable.
+        """
         key = (gender.strip().lower(), age_group.strip().lower())
         return VOICE_PROFILE_MAP.get(key, VOICE_PROFILE_MAP[("neutral", "adult")])
 
     def _ensure_output_dir(self) -> Path:
+        """Ensure output dir.
+        
+        Args:
+            None.
+        
+        Returns:
+            The Path value produced by this callable.
+        """
         output_dir = Path.cwd() / self.output_dir_name
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
     def _build_output_path(self, output_dir: Path, profile: VoiceProfile) -> Path:
+        """Build output path.
+        
+        Args:
+            output_dir: Directory used for output files.
+            profile: Voice profile used for speech synthesis.
+        
+        Returns:
+            The Path value produced by this callable.
+        """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"tts_{timestamp}_{profile.gender}_{profile.age_group}_{profile.voice}.wav"
         return output_dir / filename
 
     def _validate_wav_file(self, file_path: Path) -> str | None:
+        """Validate wav file.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         if not file_path.exists():
             return "The generated audio file was not created."
         if file_path.stat().st_size <= 44:
@@ -142,6 +198,14 @@ class OpenAITTS:
         return None
 
     def play_wav_file(self, file_path: str | Path) -> str:
+        """Play wav file.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         path = Path(file_path)
         validation_error = self._validate_wav_file(path)
         if validation_error is not None:
@@ -169,11 +233,27 @@ class OpenAITTS:
         raise RuntimeError("No audio playback backend is available.")
 
     def _play_with_winsound(self, file_path: Path) -> None:
+        """Play with winsound.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+        
+        Returns:
+            None.
+        """
         import winsound
 
         winsound.PlaySound(str(file_path), winsound.SND_FILENAME)
 
     def open_wav_with_system_player(self, file_path: str | Path) -> None:
+        """Open wav with system player.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+        
+        Returns:
+            None.
+        """
         path = Path(file_path)
         validation_error = self._validate_wav_file(path)
         if validation_error is not None:
@@ -184,6 +264,14 @@ class OpenAITTS:
         raise RuntimeError("System player launch is only implemented for Windows.")
 
     def _play_with_sounddevice(self, file_path: Path) -> None:
+        """Play with sounddevice.
+        
+        Args:
+            file_path: Path to the file being read, written, or played.
+        
+        Returns:
+            None.
+        """
         sounddevice = self._load_sounddevice_module()
         with wave.open(str(file_path), "rb") as wav_file:
             channels = wav_file.getnchannels()
@@ -208,6 +296,14 @@ class OpenAITTS:
         sounddevice.wait()
 
     def _get_api_key(self) -> str | None:
+        """Get api key.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str | None value produced by this callable.
+        """
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
             return api_key
@@ -233,6 +329,14 @@ class OpenAITTS:
         return None
 
     def _load_openai_client_class(self):
+        """Load openai client class.
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:
@@ -242,6 +346,14 @@ class OpenAITTS:
         return OpenAI
 
     def _load_sounddevice_module(self):
+        """Load sounddevice module.
+        
+        Args:
+            None.
+        
+        Returns:
+            The result produced by this callable.
+        """
         try:
             import sounddevice  # type: ignore
         except ImportError as exc:
@@ -251,6 +363,14 @@ class OpenAITTS:
         return sounddevice
 
     def _error(self, message: str) -> dict[str, Any]:
+        """Error.
+        
+        Args:
+            message: Human-readable message text.
+        
+        Returns:
+            The dict[str, Any] value produced by this callable.
+        """
         return {
             "status": "error",
             "message": message,
@@ -259,4 +379,12 @@ class OpenAITTS:
 
     @staticmethod
     def _timestamp() -> str:
+        """Timestamp.
+        
+        Args:
+            None.
+        
+        Returns:
+            The str value produced by this callable.
+        """
         return datetime.now().isoformat(timespec="seconds")

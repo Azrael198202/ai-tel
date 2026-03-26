@@ -14,6 +14,14 @@ LISTEN_PROCESS_CHOICES = ["transcript", "detect", "analyze", "generate"]
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build parser.
+    
+    Args:
+        None.
+    
+    Returns:
+        The argparse.ArgumentParser value produced by this callable.
+    """
     parser = argparse.ArgumentParser(description="AI text processing toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -40,11 +48,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _configure_stdout() -> None:
+    """Configure stdout.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
 
 def _process_transcript(processor: AITextProcessor, transcript: dict[str, object], args: argparse.Namespace) -> dict[str, object]:
+    """Process transcript.
+    
+    Args:
+        processor: Text processor instance used by the command flow.
+        transcript: Transcript payload produced by speech recognition.
+        args: Parsed command-line arguments.
+    
+    Returns:
+        The dict[str, object] value produced by this callable.
+    """
     text = str(transcript["text"])
 
     if args.process == "detect":
@@ -75,6 +101,14 @@ def _process_transcript(processor: AITextProcessor, transcript: dict[str, object
 
 
 def main() -> None:
+    """Main.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     _configure_stdout()
     parser = build_parser()
     args = parser.parse_args()

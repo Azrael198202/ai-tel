@@ -9,6 +9,14 @@ from ai_tel import AITextProcessor
 
 
 def main() -> None:
+    """Main.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
     print(processor.detect_language("Hello from the compatibility script."))
     print(processor.analyze_text("This project has been reorganized into a package."))

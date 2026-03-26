@@ -7,6 +7,14 @@ from ai_tel import AITextProcessor
 
 
 def test_detect_language_returns_success_for_english() -> None:
+    """Test that detect language returns success for english.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
 
     result = processor.detect_language("Hello, this is a short test.")
@@ -17,6 +25,14 @@ def test_detect_language_returns_success_for_english() -> None:
 
 
 def test_detect_language_rejects_empty_text() -> None:
+    """Test that detect language rejects empty text.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
 
     result = processor.detect_language("   ")
@@ -26,6 +42,14 @@ def test_detect_language_rejects_empty_text() -> None:
 
 
 def test_analyze_text_returns_basic_metrics() -> None:
+    """Test that analyze text returns basic metrics.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
 
     result = processor.analyze_text("This is a clear sentence. This is another one.")
@@ -36,6 +60,14 @@ def test_analyze_text_returns_basic_metrics() -> None:
 
 
 def test_generate_text_honors_max_length() -> None:
+    """Test that generate text honors max length.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
 
     result = processor.generate_text("machine learning", length=60)
@@ -46,6 +78,14 @@ def test_generate_text_honors_max_length() -> None:
 
 
 def test_history_tracks_successful_operations() -> None:
+    """Test that history tracks successful operations.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     processor = AITextProcessor()
 
     processor.detect_language("Hello world")

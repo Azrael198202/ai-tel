@@ -7,6 +7,14 @@ from ai_tel.cli import build_parser
 
 
 def test_listen_parser_defaults_to_transcript() -> None:
+    """Test that listen parser defaults to transcript.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     parser = build_parser()
 
     args = parser.parse_args(["listen"])
@@ -17,6 +25,14 @@ def test_listen_parser_defaults_to_transcript() -> None:
 
 
 def test_listen_parser_accepts_generate_pipeline_options() -> None:
+    """Test that listen parser accepts generate pipeline options.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     parser = build_parser()
 
     args = parser.parse_args([

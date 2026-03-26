@@ -7,32 +7,88 @@ from ai_tel.openai_speech import MicrophoneRecorder, OpenAISpeechRecognizer
 
 
 class _FakeTranscription:
+    """Test double for Transcription.
+    """
     def __init__(self, text: str) -> None:
+        """Initialize the _FakeTranscription instance.
+        
+        Args:
+            text: Input text handled by the current operation.
+        
+        Returns:
+            None.
+        """
         self.text = text
         self.usage = {"seconds": 4}
 
 
 class _FakeTranscriptionsApi:
+    """Test double for TranscriptionsApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeTranscriptionsApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.last_kwargs = None
 
     def create(self, **kwargs):
+        """Create.
+        
+        Args:
+            kwargs: Additional keyword arguments passed through the helper.
+        
+        Returns:
+            The result produced by this callable.
+        """
         self.last_kwargs = kwargs
         return _FakeTranscription("hello world")
 
 
 class _FakeAudioApi:
+    """Test double for AudioApi.
+    """
     def __init__(self) -> None:
+        """Initialize the _FakeAudioApi instance.
+        
+        Args:
+            None.
+        
+        Returns:
+            None.
+        """
         self.transcriptions = _FakeTranscriptionsApi()
 
 
 class _FakeOpenAIClient:
+    """Test double for OpenAIClient.
+    """
     def __init__(self, api_key: str) -> None:
+        """Initialize the _FakeOpenAIClient instance.
+        
+        Args:
+            api_key: OpenAI API key value.
+        
+        Returns:
+            None.
+        """
         self.api_key = api_key
         self.audio = _FakeAudioApi()
 
 
 def test_microphone_recorder_rejects_invalid_duration() -> None:
+    """Test that microphone recorder rejects invalid duration.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recorder = MicrophoneRecorder()
 
     result = recorder.record_to_wav(duration=0)
@@ -42,6 +98,14 @@ def test_microphone_recorder_rejects_invalid_duration() -> None:
 
 
 def test_microphone_recorder_rejects_stop_before_start() -> None:
+    """Test that microphone recorder rejects stop before start.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recorder = MicrophoneRecorder()
 
     result = recorder.stop_recording_to_wav()
@@ -51,6 +115,14 @@ def test_microphone_recorder_rejects_stop_before_start() -> None:
 
 
 def test_openai_transcriber_requires_api_key(monkeypatch) -> None:
+    """Test that openai transcriber requires api key.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -68,6 +140,14 @@ def test_openai_transcriber_requires_api_key(monkeypatch) -> None:
 
 
 def test_openai_transcriber_reads_api_key_from_dotenv(monkeypatch) -> None:
+    """Test that openai transcriber reads api key from dotenv.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
@@ -80,6 +160,14 @@ def test_openai_transcriber_reads_api_key_from_dotenv(monkeypatch) -> None:
 
 
 def test_openai_transcriber_normalizes_culture_to_language_hint() -> None:
+    """Test that openai transcriber normalizes culture to language hint.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
 
     assert recognizer._normalize_language_hint("ja-JP") == "ja"
@@ -88,6 +176,14 @@ def test_openai_transcriber_normalizes_culture_to_language_hint() -> None:
 
 
 def test_openai_transcriber_builds_default_language_prompt() -> None:
+    """Test that openai transcriber builds default language prompt.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
 
     prompt = recognizer._build_prompt("ja", None)
@@ -97,6 +193,14 @@ def test_openai_transcriber_builds_default_language_prompt() -> None:
 
 
 def test_openai_transcriber_can_preserve_audio_file() -> None:
+    """Test that openai transcriber can preserve audio file.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
 
     temp_root = Path("tests_tmp/preserve_audio")
@@ -113,6 +217,14 @@ def test_openai_transcriber_can_preserve_audio_file() -> None:
 
 
 def test_openai_transcriber_detects_quiet_audio() -> None:
+    """Test that openai transcriber detects quiet audio.
+    
+    Args:
+        None.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
 
     assert recognizer.has_usable_audio({"peak_level": 0.0002, "rms_level": 0.0001}) is False
@@ -120,6 +232,14 @@ def test_openai_transcriber_detects_quiet_audio() -> None:
 
 
 def test_openai_transcriber_uses_gpt_4o_transcribe(monkeypatch) -> None:
+    """Test that openai transcriber uses gpt 4o transcribe.
+    
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    
+    Returns:
+        None.
+    """
     recognizer = OpenAISpeechRecognizer()
     fake_client = _FakeOpenAIClient(api_key="test-key")
 
